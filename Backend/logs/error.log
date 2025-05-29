@@ -1,0 +1,6 @@
+{"level":"error","message":"WooCommerce: Get all products error: Request failed with status code 400","service":"vogo-backend","timestamp":"2025-05-25 19:56:51"}
+{"level":"error","message":"WooCommerce: API response error: {\"code\":\"rest_invalid_param\",\"message\":\"Invalid parameter(s): per_page\",\"data\":{\"status\":400,\"params\":{\"per_page\":\"per_page must be between 1 (inclusive) and 100 (inclusive)\"},\"details\":{\"per_page\":{\"code\":\"rest_out_of_bounds\",\"message\":\"per_page must be between 1 (inclusive) and 100 (inclusive)\",\"data\":null}}}}","service":"vogo-backend","timestamp":"2025-05-25 19:56:51"}
+{"level":"error","message":"WooCommerce: Get all categories error: aborted","service":"vogo-backend","timestamp":"2025-05-25 20:00:54"}
+{"level":"error","message":"WooCommerce: Search products error: socket hang up","service":"vogo-backend","timestamp":"2025-05-26 00:47:15"}
+{"level":"error","message":"WooCommerce: Search products error: socket hang up","service":"vogo-backend","timestamp":"2025-05-26 00:47:24"}
+{"level":"error","message":"Error generating product introduction: consol is not defined","service":"vogo-backend","timestamp":"2025-05-28 21:40:49"}

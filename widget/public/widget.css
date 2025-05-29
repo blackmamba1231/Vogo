@@ -1,0 +1,24 @@
+/**
+ * Vogo Chat Widget Styles
+ * These styles apply to the embedded widget container
+ */
+
+#vogo-chat-widget-container {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+#vogo-chat-widget-frame {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  #vogo-chat-widget-frame {
+    border-radius: 0;
+  }
+}
