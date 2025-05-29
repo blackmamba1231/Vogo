@@ -27,15 +27,34 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const allowedOrigins = [
   'https://vogo-five.vercel.app',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://vogo-backend.vercel.app'
 ];
-// Middleware
-app.use(cors({
-  origin: allowedOrigins,
+
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS with the above configuration
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 app.use(helmet());
 app.use(morgan('dev', { stream: logger.stream }));
 app.use(bodyParser.json());
