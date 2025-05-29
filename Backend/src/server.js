@@ -25,10 +25,13 @@ const { initCronJobs } = require('./utils/cronJobs');
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
-
+const allowedOrigins = [
+  'https://vogo-five.vercel.app',
+  'http://localhost:3000'
+];
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
