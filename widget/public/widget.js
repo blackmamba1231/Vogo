@@ -51,8 +51,8 @@
 
   function loadFallbackResources() {
     // These paths should be updated after each deployment
-    const cssPath = `${baseUrl}/_next/static/css/6e0e4ec1b0738fb7.css`;
-    const jsPath = `${baseUrl}/_next/static/chunks/main-app-116ab2d17589b36.js`;
+    const cssPath = `${baseUrl}/_next/static/css/e60b2bb6c1978960.css`;
+    const jsPath = `${baseUrl}/_next/static/chunks/main-app-116ab2d175890b3e.js`;
     
     loadCSS(cssPath);
     loadScript(jsPath);
