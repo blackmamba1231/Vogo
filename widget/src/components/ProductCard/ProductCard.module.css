@@ -270,6 +270,174 @@
 }
 
 /* Responsive styles */
+/* Minimize button */
+.minimizeButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+/* Style for minimize button in compact cards */
+.compactCard .minimizeButton {
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  background-color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.minimizeButton:hover {
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.minimizeButton:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.4);
+}
+
+/* Compact card styles for chat layout */
+.compactCard {
+  display: flex;
+  flex-direction: row;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 10px;
+  max-width: 280px;
+  width: 100%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.compactCard .productImage {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.compactCard img.productImage {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+/* New compact styles for better layout */
+.compactCard {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 250px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 10px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.compactLink {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  width: 100%;
+}
+
+.compactLayout {
+  display: flex;
+  width: 100%;
+}
+
+.compactImage {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.compactInfo {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.compactName {
+  font-size: 14px;
+  margin: 0 0 5px 0;
+  font-weight: 500;
+  color: #333;
+}
+
+.compactPrice {
+  font-size: 13px;
+  font-weight: bold;
+  color: #006633;
+}
+
+.minimizedContent {
+  padding: 8px 8px 8px 30px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Minimized state */
+.minimized {
+  height: auto;
+}
+
+.minimized .productImage,
+.minimized .productInfo,
+.minimized .originalPrice,
+.minimized .productCategories,
+.minimized .productPrice {
+  display: none;
+}
+
+.minimized .productLink {
+  height: 40px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.minimized::after {
+  content: attr(data-product-name);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 400px) {
   .productCard {
     flex-direction: column;

@@ -2,14 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const logger = require('../utils/logger');
 
-// Use the global Redis client that's initialized in server.js
-const getRedisClient = () => {
-  if (!global.redisClient) {
-    logger.warn('Global Redis client not available in auth middleware');
-    return null;
-  }
-  return global.redisClient;
-};
+
 
 const authMiddleware = async (req, res, next) => {
   try{

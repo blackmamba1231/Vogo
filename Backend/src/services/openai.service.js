@@ -1,7 +1,6 @@
 const { OpenAI } = require('openai');
 const logger = require('../utils/logger');
-const wooCommerceService = require('./woocommerce.service');
-
+const Conversation = require('../models/conversation.model');
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -27,8 +26,16 @@ class OpenAIService {
 
   // In openai.service.js, update the checkSchedulingIntent function:
 
-async checkSchedulingIntent(message) {
+async checkSchedulingIntent(message, conversationId ) {
   try {
+     const conversation = await Conversation.findOne({ _id: conversationId });
+        if (!conversation) {
+          return res.status(404).json({
+            error: true,
+            message: 'Conversation not found'
+          });
+        }
+
     const prompt = `Analyze the following message for scheduling intent and extract details. 
     Return a JSON object with these fields:
     - isScheduling (boolean): true if the message is about scheduling an appointment
@@ -39,7 +46,8 @@ async checkSchedulingIntent(message) {
     - location (string): location or service center mentioned, if any
 
     Message: "${message}"
-
+    consider the previous conversations also '${conversation.messages}' for proper state conservation of the conversations
+    so if the previous conversations also you are provided with the isScheduling (boolean), serviceType (string), hasDate (boolean), hasTime (boolean), dateTime (string), location (string) then consider those also in your final response
     Example response for "I need a brake service in Alba Iulia tomorrow at 10 AM":
     {
       "isScheduling": true,
@@ -50,7 +58,7 @@ async checkSchedulingIntent(message) {
       "location": "Alba Iulia"
     }`;
 
-    const response = await this.openai.chat.completions.create({
+    const response = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
       messages: [
         { role: "system", content: "You are a helpful assistant that analyzes messages for scheduling intent." },
@@ -62,7 +70,7 @@ async checkSchedulingIntent(message) {
     });
 
     const result = JSON.parse(response.choices[0].message.content);
-    
+    console.log("Scheduling Intent :",result);
     // Ensure all required fields are present
     return {
       isScheduling: Boolean(result.isScheduling),

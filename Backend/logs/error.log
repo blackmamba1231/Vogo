@@ -4,3 +4,5 @@
 {"level":"error","message":"WooCommerce: Search products error: socket hang up","service":"vogo-backend","timestamp":"2025-05-26 00:47:15"}
 {"level":"error","message":"WooCommerce: Search products error: socket hang up","service":"vogo-backend","timestamp":"2025-05-26 00:47:24"}
 {"level":"error","message":"Error generating product introduction: consol is not defined","service":"vogo-backend","timestamp":"2025-05-28 21:40:49"}
+{"level":"error","message":"WooCommerce: Get all products error: socket hang up","service":"vogo-backend","timestamp":"2025-05-29 21:30:02"}
+{"level":"error","message":"WooCommerce: Get all products error: getaddrinfo ENOTFOUND vogo.family","service":"vogo-backend","timestamp":"2025-06-01 08:30:00"}

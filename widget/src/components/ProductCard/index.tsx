@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { Product } from '../../services/api';
 import styles from './ProductCard.module.css';
 
 interface ProductCardProps {
   product: Product;
+  compact?: boolean; // Add compact mode for better layout in chat messages
 }
 
-const ProductCard = ({ product }: ProductCardProps) => {
+const ProductCard = ({ product, compact = false }: ProductCardProps) => {
+
   // Safely format price
   const formatPrice = (price: string | number | undefined): string => {
     if (price === undefined || price === null) return 'Price varies';
@@ -28,12 +31,18 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
   // Get the best available image URL
   const getImageUrl = (): string | null => {
-    if (product.image) return product.image;
+    if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
+      return product.image;
+    }
     
-    // Handle different image formats from the backend
-    if (Array.isArray(product.images) && product.images.length > 0) {
+    if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+      // Handle different image formats
       const firstImage = product.images[0];
-      return typeof firstImage === 'string' ? firstImage : (firstImage as any)?.src || null;
+      if (typeof firstImage === 'string') {
+        return firstImage;
+      } else if (firstImage && typeof firstImage === 'object' && firstImage.src) {
+        return firstImage.src;
+      }
     }
     
     return null;
@@ -73,10 +82,47 @@ const ProductCard = ({ product }: ProductCardProps) => {
     parseFloat(product.price) < parseFloat(product.regular_price)
   );
 
+  // For compact mode, use a more simple and robust layout
+  if (compact) {
+    return (
+      <div 
+        className={`${styles.productCard} ${styles.compactCard}`}
+        data-testid="product-card"
+      >
+          <a 
+            href={productUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className={styles.compactLink}
+          >
+            <div className={styles.compactLayout}>
+              {imageUrl ? (
+                <img 
+                  src={imageUrl} 
+                  alt={productName}
+                  className={styles.compactImage}
+                  loading="lazy"
+                  onError={handleImageError}
+                />
+              ) : (
+                <div className={styles.noImage}>
+                  <span>No Image</span>
+                </div>
+              )}
+              <div className={styles.compactInfo}>
+                <h3 className={styles.compactName}>{productName.length > 25 ? `${productName.substring(0, 22)}...` : productName}</h3>
+                <div className={styles.compactPrice}>{formattedPrice}</div>
+              </div>
+            </div>
+          </a>
+      </div>
+    );
+  }
+  
+  // Regular card for non-compact mode
   return (
     <div 
       className={styles.productCard}
-      data-has-sale={isOnSale}
       data-testid="product-card"
     >
       <a 

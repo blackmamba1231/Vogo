@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
-const { createClient } = require('redis');
-const redisClient = createClient({ url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}` });
+
+
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -97,17 +97,7 @@ exports.login = async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
     
-    // Cache user session in Redis for faster access
-    await redisClient.set(`user:${user._id}`, JSON.stringify({
-      id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      preferredLanguage: user.preferredLanguage,
-      role: user.role
-    }), {
-      EX: 60 * 60 * 24 * 7 // 7 days (matching JWT expiry)
-    });
+    
     
     res.status(200).json({
       error: false,
@@ -170,14 +160,6 @@ exports.logout = async (req, res) => {
     const expirationTime = new Date(decoded.exp * 1000).getTime() - new Date().getTime();
     const expirationSeconds = Math.floor(expirationTime / 1000);
     
-    if (expirationSeconds > 0) {
-      await redisClient.set(`blacklist:${token}`, 'true', {
-        EX: expirationSeconds
-      });
-    }
-    
-    // Remove user data from Redis cache
-    await redisClient.del(`user:${req.user.id}`);
     
     res.status(200).json({
       error: false,

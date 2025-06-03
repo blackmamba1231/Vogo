@@ -9,25 +9,17 @@ const calendarService = require('../services/calendar.service');
 const woocommerceService = require('../services/woocommerce.service');
 const woocommerceSyncService = require('../services/woocommerce-sync.service');
 const ticketService = require('../services/ticket.service');
-const { createClient } = require('redis');
 const nodemailer = require('nodemailer');
 const SYSTEM_PROMPT = `You are a helpful assistant for our business that provides products and services. 
 - Maintain context of previous messages in the conversation.
 - If the user refers to products or services mentioned earlier, use that context.
 - When showing products, include clear names and prices.
 - If the user wants to order, ask for any missing details (quantity, size, etc.).
-- Be friendly and professional in all responses.`;
-// Initialize Redis client
-const redisClient = createClient({
-  url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
-  password: process.env.REDIS_PASSWORD || undefined,
-});
-// Initialize OpenAI client
+- Be friendly and professional in all responses.
+`;
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-redisClient.connect().catch(err => console.error('Redis connection error in chat controller:', err));
-
 // Email transport configuration
 const emailTransporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -54,9 +46,10 @@ exports.startConversation = async (req, res) => {
     // Detect language of initial message
     const language = await openAIService.detectLanguage(initialMessage);
     console.log('Language detected:', language);
-    // Create new conversation
-    const conversation = new Conversation({
+    // Create new conversation with user ID if provided
+    const conversationData = {
       sessionId,
+      ...(req.body.wpUserId && { userId: req.body.wpUserId }),
       language,
       messages: [
         {
@@ -64,7 +57,9 @@ exports.startConversation = async (req, res) => {
           content: initialMessage
         }
       ]
-    });
+    };
+    
+    const conversation = new Conversation(conversationData);
     console.log('Conversation created:', conversation);
     // Process message with OpenAI
     let aiResponse = await openAIService.processMessage(
@@ -72,10 +67,48 @@ exports.startConversation = async (req, res) => {
       sessionId,
       language
     );
+    const conversationId = conversation._id;
+    const Prompt = `Determine if this message is requesting to do any of the following:
+1. Product/service search
+2. Ordering intent
+3. Scheduling or making an appointment
+4. Asking to show previous schedules or appointments
+5.If it is a general intent
+6.if the user wants to show the previous tickets 
+7.if user wants to talk to a human representative
+
+Respond in **valid JSON** format like this:
+{
+  "isScheduling": true/false,
+  "isProductorServiceSearch": true/false,
+  "isOrdering": true/false,
+  "isPreviousSchedules": true/false,
+  "isGeneral": true/false,
+  "isPreviousTickets": true/false,
+  "isHumanRepresentative": true/false
+}
+Only one of the above fields should be true. Be very smart and accurate in detection.
+Respond with only valid JSON, no extra text, no markdown.
+also consider previous converstations {${JSON.stringify(conversation)}} for proper state management of the chat because for example if our chatbot has replied with asking some missing infos (example : date or time) so you properly understand the intent properly by considering previous conversation messages also..
+`;
+let intent;
+        //checking the user message with this prompt
+        intent = await openai.chat.completions.create({
+          model: "gpt-4-turbo",
+          messages: [
+            { role: "system", content: Prompt },
+            { role: "user", content: initialMessage }
+          ],
+          temperature: 0.2
+        });
+        console.log("response from openai", intent.choices[0].message.content)
+        let response;
+        response = JSON.parse(intent.choices[0].message.content);
+        
     // Detect intent first
-    conversation.intent = await openAIService.detectIntent(initialMessage, language);
-    console.log('Intent detected:', conversation.intent);
-    if(conversation.intent === 'other'){
+    
+    console.log('Intent detected:', response);
+    if(response.isGeneral){
       aiResponse = await openAIService.processMessage(
         conversation.messages,
         sessionId,
@@ -83,14 +116,165 @@ exports.startConversation = async (req, res) => {
       );
       Object.assign(conversation, aiResponse.conversation);
       console.log('AI response for simple message:', aiResponse)
-    }else{
-    // Handle special intents like product search for the initial message BEFORE adding response
-    // This ensures local database is used for product searches from the start
-    const intentHandled = await handleIntent(conversation, initialMessage, aiResponse);
-    if (intentHandled && intentHandled.aiResponse) {
-      aiResponse = intentHandled.aiResponse;
-      Object.assign(conversation, intentHandled.conversation);
     }
+    if (response.isScheduling) {
+      if(conversation.userId == null){
+        conversation.messages.push({
+          role: 'assistant',
+          content: "You must login first to schedule an appointment"
+        })
+        await conversation.save();
+        const responseData = {
+          error: false,
+          data: {
+            conversationId: conversation._id,
+            sessionId,
+            messages: conversation.messages,
+            language,
+            foodProducts: conversation.foodProducts || []
+          }
+        };
+        
+        console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+        res.status(200).json(responseData);
+        return;
+      }
+    }
+    console.log("no scheduling intent was found proceeding with the product search");
+    // Check for product search/order intent
+  
+    if (response.isProductorServiceSearch ) {
+      console.log("product search intent was found proceeding with the product search")
+      const intentHandled = await handleIntent(conversation, initialMessage, aiResponse);
+      if (intentHandled && intentHandled.aiResponse) {
+        console.log("after intentHandle response:",intentHandled.aiResponse)
+        aiResponse = intentHandled.aiResponse;
+        Object.assign(conversation, intentHandled.conversation);
+        console.log("done with the product searching");
+      }
+    }
+    if(response.isOrdering){
+      let schedulingInfo;
+      schedulingInfo = await openAIService.checkSchedulingIntent(initialMessage, conversationId);
+      console.log("scheduling info: ", schedulingInfo)
+      console.log(" ordering intent detected")
+      const schedulingResult = await handleSchedulingFlow(conversation, initialMessage, schedulingInfo);
+      
+      // Add AI response to conversation
+      conversation.messages.push({
+        role: 'assistant',
+        content: schedulingResult.aiResponse.content,
+        timestamp: new Date()
+      });
+      
+      // Save the updated conversation
+      await conversation.save();
+      
+      // Return the complete response
+      return res.status(200).json({
+        error: false,
+        data: {
+          conversationId: conversation._id,
+          sessionId: conversation.sessionId,
+          messages: conversation.messages,
+          language: conversation.language,
+          ...(schedulingResult.aiResponse.metadata || {})
+        }
+      });
+    }
+    if(response.isPreviousSchedules){
+      if(conversation.userId == null){
+        conversation.messages.push({
+          role: 'assistant',
+          content: "You must login to see your previous schedules"
+        })
+        await conversation.save();
+        const responseData = {
+          error: false,
+          data: {
+            conversationId: conversation._id,
+            sessionId,
+            messages: conversation.messages,
+            language,
+            foodProducts: conversation.foodProducts || []
+          }
+        };
+        
+        console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+        res.status(200).json(responseData);
+        return;
+      }else{
+        try {
+          const calendar = await getCalendarClient(conversation.userId);
+          const now = new Date();
+          const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          
+          const events = await calendar.events.list({
+            calendarId: 'primary',
+            timeMin: oneYearAgo.toISOString(),
+            timeMax: now.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+          });
+      
+          const schedules = events.data.items.map(event => ({
+            summary: event.summary,
+            start: event.start.dateTime || event.start.date,
+            end: event.end.dateTime || event.end.date,
+            status: event.status
+          }));
+      
+          let message = schedules.length > 0 
+            ? "Here are your previous schedules:\n" + 
+              schedules.map((s, i) => 
+                `${i+1}. ${s.summary} - From ${new Date(s.start).toLocaleString()} to ${new Date(s.end).toLocaleString()}`
+              ).join('\n')
+            : "You don't have any previous schedules.";
+      
+          conversation.messages.push({
+            role: 'assistant',
+            content: message
+          });
+          await conversation.save();
+      
+          const responseData = {
+            error: false,
+            data: {
+              conversationId: conversation._id,
+              sessionId,
+              messages: conversation.messages,
+              language,
+              foodProducts: conversation.foodProducts || []
+            }
+          };
+          
+          console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+          res.status(200).json(responseData);
+          return;
+        } catch (error) {
+          console.error('Error fetching calendar events:', error);
+          conversation.messages.push({
+            role: 'assistant',
+            content: "Sorry, I couldn't fetch your previous schedules. Please try again later."
+          });
+          await conversation.save();
+          
+          const responseData = {
+            error: false,
+            data: {
+              conversationId: conversation._id,
+              sessionId,
+              messages: conversation.messages,
+              language,
+              foodProducts: conversation.foodProducts || []
+            }
+          };
+          
+          res.status(200).json(responseData);
+          return;
+        }
+      }
+
     }
    
     
@@ -178,6 +362,8 @@ exports.sendMessage = async (req, res) => {
 3. Scheduling or making an appointment
 4. Asking to show previous schedules or appointments
 5.If it is a general intent
+6.if the user wants to show the previous tickets 
+7.if user wants to talk to a human representative
 
 Respond in **valid JSON** format like this:
 {
@@ -185,10 +371,14 @@ Respond in **valid JSON** format like this:
   "isProductorServiceSearch": true/false,
   "isOrdering": true/false,
   "isPreviousSchedules": true/false,
-  "isGeneral": true/false
+  "isGeneral": true/false,
+  "isPreviousTickets": true/false,
+  "isHumanRepresentative": true/false
 }
 Only one of the above fields should be true. Be very smart and accurate in detection.
-Respond with only valid JSON, no extra text, no markdown.`;
+Respond with only valid JSON, no extra text, no markdown.
+also consider previous converstations {${JSON.stringify(conversation)}} for proper state management of the chat because for example if our chatbot has replied with asking some missing infos (example : date or time) so you properly understand the intent properly by considering previous conversation messages also..
+`;
 let intent;
         //checking the user message with this prompt
         intent = await openai.chat.completions.create({
@@ -224,9 +414,46 @@ let intent;
     };
   }
 
-        if (response.isScheduling) {
-          let schedulingInfo;
-          schedulingInfo = await openAIService.checkSchedulingIntent(message);
+  if(response.isGeneral){
+    aiResponse = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...conversation.messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+      ],
+      temperature: 0.7,
+      max_tokens: 500
+    });
+    aiResponse = aiResponse.choices[0].message.content;
+    console.log('AI response for simple message:', aiResponse)
+  }
+  if (response.isScheduling) {
+    if(conversation.userId == null){
+      conversation.messages.push({
+        role: 'assistant',
+        content: "You must login first to schedule an appointment"
+      })
+      await conversation.save();
+      const responseData = {
+        error: false,
+        data: {
+          conversationId: conversation._id,
+          sessionId: conversation.sessionId,
+          messages: conversation.messages,
+          language: conversation.language,
+          foodProducts: conversation.foodProducts || []
+        }
+      };
+      
+      console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+      res.status(200).json(responseData);
+      return;
+    }else{
+      let schedulingInfo;
+          schedulingInfo = await openAIService.checkSchedulingIntent(message, conversationId);
           console.log("scheduling info: ", schedulingInfo)
           const schedulingResult = await handleSchedulingFlow(conversation, message, schedulingInfo);
           
@@ -251,63 +478,144 @@ let intent;
               ...(schedulingResult.aiResponse.metadata || {})
             }
           });
+    }
+  }
+  console.log("no scheduling intent was found proceeding with the product search");
+  // Check for product search/order intent
+
+  if (response.isProductorServiceSearch ) {
+    console.log("product search intent was found proceeding with the product search")
+    const intentHandled = await handleIntent(conversation, message, aiResponse);
+    if (intentHandled && intentHandled.aiResponse) {
+      console.log("after intentHandle response:",intentHandled.aiResponse)
+      aiResponse = intentHandled.aiResponse.content;
+      Object.assign(conversation, intentHandled.conversation);
+      console.log("done with the product searching");
+    }
+  }
+  if(response.isOrdering){
+    let schedulingInfo;
+    schedulingInfo = await openAIService.checkSchedulingIntent(message, conversationId);
+    console.log("scheduling info: ", schedulingInfo)
+    console.log(" ordering intent detected")
+    const schedulingResult = await handleSchedulingFlow(conversation, message, schedulingInfo);
+    
+    // Add AI response to conversation
+    conversation.messages.push({
+      role: 'assistant',
+      content: schedulingResult.aiResponse.content,
+      timestamp: new Date()
+    });
+    
+    // Save the updated conversation
+    await conversation.save();
+    
+    // Return the complete response
+    return res.status(200).json({
+      error: false,
+      data: {
+        conversationId: conversation._id,
+        sessionId: conversation.sessionId,
+        messages: conversation.messages,
+        language: conversation.language,
+        ...(schedulingResult.aiResponse.metadata || {})
+      }
+    });
+  }
+  if(response.isPreviousSchedules){
+    if(conversation.userId == null){
+      conversation.messages.push({
+        role: 'assistant',
+        content: "You must login to see your previous schedules"
+      })
+      await conversation.save();
+      const responseData = {
+        error: false,
+        data: {
+          conversationId: conversation._id,
+          sessionId: conversation.sessionId,
+          messages: conversation.messages,
+          language: conversation.language,
+          foodProducts: conversation.foodProducts || []
         }
-        console.log("no scheduling intent was found proceeding with the product search");
-        // Check for product search/order intent
+      };
       
-        if (response.isProductorServiceSearch || response.isPreviousSchedules ) {
-          console.log("product search intent was found proceeding with the product search")
-          const intentHandled = await handleIntent(conversation, message, aiResponse);
-          if (intentHandled && intentHandled.aiResponse) {
-            console.log("after intentHandle response:",intentHandled.aiResponse)
-            aiResponse = intentHandled.aiResponse.content;
-            Object.assign(conversation, intentHandled.conversation);
-            console.log("done with the product searching");
+      console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+      res.status(200).json(responseData);
+      return;
+    }else{
+      try {
+        const calendar = await getCalendarClient(conversation.userId);
+        const now = new Date();
+        const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        
+        const events = await calendar.events.list({
+          calendarId: 'primary',
+          timeMin: oneYearAgo.toISOString(),
+          timeMax: now.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+    
+        const schedules = events.data.items.map(event => ({
+          summary: event.summary,
+          start: event.start.dateTime || event.start.date,
+          end: event.end.dateTime || event.end.date,
+          status: event.status
+        }));
+    
+        let message = schedules.length > 0 
+          ? "Here are your previous schedules:\n" + 
+            schedules.map((s, i) => 
+              `${i+1}. ${s.summary} - From ${new Date(s.start).toLocaleString()} to ${new Date(s.end).toLocaleString()}`
+            ).join('\n')
+          : "You don't have any previous schedules.";
+    
+        conversation.messages.push({
+          role: 'assistant',
+          content: message
+        });
+        await conversation.save();
+    
+        const responseData = {
+          error: false,
+          data: {
+            conversationId: conversation._id,
+            sessionId: conversation.sessionId,
+            messages: conversation.messages,
+            language: conversation.language,
+            foodProducts: conversation.foodProducts || []
           }
-        }
-        if(response.isOrdering){
-          console.log(" ordering intent detected")
-          const schedulingResult = await handleSchedulingFlow(conversation, message, schedulingInfo);
-          
-          // Add AI response to conversation
-          conversation.messages.push({
-            role: 'assistant',
-            content: schedulingResult.aiResponse.content,
-            timestamp: new Date()
-          });
-          
-          // Save the updated conversation
-          await conversation.save();
-          
-          // Return the complete response
-          return res.status(200).json({
-            error: false,
-            data: {
-              conversationId: conversation._id,
-              sessionId: conversation.sessionId,
-              messages: conversation.messages,
-              language: conversation.language,
-              ...(schedulingResult.aiResponse.metadata || {})
-            }
-          });
-        }
-        if(response.isGeneral){
-          console.log("got general intent");
-          //genrate the response of the message with openai
-          aiResponse = await openai.chat.completions.create({
-            model: "gpt-4-turbo-preview",
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              ...conversation.messages.map(msg => ({
-                role: msg.role,
-                content: msg.content
-              }))
-            ],
-            temperature: 0.7,
-            max_tokens: 500
-          });
-          
-        }
+        };
+        
+        console.log('Sending response with data:', JSON.stringify(responseData, null, 2));
+        res.status(200).json(responseData);
+        return;
+      } catch (error) {
+        console.error('Error fetching calendar events:', error);
+        conversation.messages.push({
+          role: 'assistant',
+          content: "Sorry, I couldn't fetch your previous schedules. Please try again later."
+        });
+        await conversation.save();
+        
+        const responseData = {
+          error: false,
+          data: {
+            conversationId: conversation._id,
+            sessionId: conversation.sessionId,
+            messages: conversation.messages,
+            language: conversation.language,
+            foodProducts: conversation.foodProducts || []
+          }
+        };
+        
+        res.status(200).json(responseData);
+        return;
+      }
+    }
+
+  }
         // Add AI response to conversation
         conversation.messages.push({
           role: 'assistant',
@@ -415,6 +723,31 @@ const appointment = await calendarService.createEvent(
   eventDetails,
   guestId
 );
+const formatDateTime = (date) => {
+  // Format the date in Romania timezone
+  const dateStr = date.toLocaleDateString('en-US', {
+    timeZone: 'Europe/Bucharest',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  // Format the time in Romania timezone
+  const timeStr = date.toLocaleTimeString('en-US', {
+    timeZone: 'Europe/Bucharest',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+  
+  return {
+    formattedDate: dateStr,
+    formattedTime: timeStr
+  };
+};
+
+const { formattedDate, formattedTime } = formatDateTime(localDateTime);
 
 // Add this ticket creation code:
 const ticketData = {
@@ -450,36 +783,11 @@ try {
   await appointment.save();
 } catch (ticketError) {
   console.error('Error creating ticket:', ticketError);
-  // Don't fail the whole operation if ticket creation fails
+ 
 }
         
         // Format date and time in the Romania timezone
-        const formatDateTime = (date) => {
-          // Format the date in Romania timezone
-          const dateStr = date.toLocaleDateString('en-US', {
-            timeZone: 'Europe/Bucharest',
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-          
-          // Format the time in Romania timezone
-          const timeStr = date.toLocaleTimeString('en-US', {
-            timeZone: 'Europe/Bucharest',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          });
-          
-          return {
-            formattedDate: dateStr,
-            formattedTime: timeStr
-          };
-        };
-        
-        const { formattedDate, formattedTime } = formatDateTime(localDateTime);
-        
+       
         // Log the formatted time for debugging
         console.log('Formatted date/time:', { 
           original: startDateTime.toString(),
@@ -938,11 +1246,43 @@ const handleIntent = async (conversation, userMessage, aiResponse) => {
     // If not scheduling or human operator request, proceed with product search
     let searchQuery = userMessage;
     let categorySlug = '';
+    const prompt = `You are a search query optimizer for an e-commerce product search engine.
 
+Your task is to extract only the essential search terms from the user's query, focusing on:
+1. Product types (e.g., pizza, shoes, laptop)
+2. Product attributes (e.g., Italian, leather, gaming)
+3. Service categories (e.g., travel, cleaning, repair)
+
+Remove filler words like:
+- General request phrases ("find me", "looking for", "I want", "I need")
+- Politeness markers ("please", "thank you")
+- Articles and common prepositions when not essential to meaning
+
+Return ONLY the essential search terms, nothing else. No explanations or additional text.
+
+Examples:
+- Input: "find me best pizza" → Output: "pizza"
+- Input: "I need Italian pizza please" → Output: "Italian pizza"
+- Input: "t please I am looking for travel and assistance services" → Output: "travel"
+- Input: "can you show me red running shoes for men" → Output: "shoes"
+-Input : "i need travel services to abu dhabi/any other locations "-> "travel"
+means ignore all the things instead of one word that is representing main context dont include locations , types or other generics defined by user you have to be smart
+
+User query: ${userMessage}`;
+
+    const filteredQueryResponse = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: prompt }
+      ],
+      temperature: 0.3
+    });
     // Rest of your existing product search logic...
-    console.log(`Searching local database for: "${searchQuery}"`);
+    const filteredQuery = filteredQueryResponse.choices[0].message.content.trim();
+    console.log(`Original query: "${searchQuery}"`);
+    console.log(`Filtered query for search: "${filteredQuery}"`);
     const products = await woocommerceLocalService.searchProducts(
-      searchQuery,
+      filteredQuery,
       categorySlug
     );
 

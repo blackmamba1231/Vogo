@@ -1,6 +1,63 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { WhisperRecorder } from '../../utils/whisper';
+
+// Extend the Window interface to include webkitSpeechRecognition
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
+  }
+
+  interface SpeechRecognitionEvent extends Event {
+    results: {
+      isFinal: boolean;
+      [key: number]: {
+        transcript: string;
+      };
+    }[];
+    resultIndex: number;
+  }
+
+  interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    maxAlternatives: number;
+    // Note: state is not part of the standard Web Speech API
+    // but some implementations might have it
+    state?: string;
+    start: () => void;
+    stop: () => void;
+    abort: () => void;
+    onresult: (event: SpeechRecognitionEvent) => void;
+    onerror: (event: Event) => void;
+    onend: () => void;
+    onaudiostart: () => void;
+    onsoundstart: () => void;
+    onspeechstart: () => void;
+    onspeechend: () => void;
+    onsoundend: () => void;
+    onaudioend: () => void;
+    onnomatch: () => void;
+  }
+
+  var SpeechRecognition: {
+    prototype: SpeechRecognition;
+    new (): SpeechRecognition;
+  };
+
+  var webkitSpeechRecognition: {
+    prototype: SpeechRecognition;
+    new (): SpeechRecognition;
+  };
+
+  interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
+    message: string;
+  }
+}
 import styles from './FloatingWidget.module.css';
 import chatAPI, { Message, Conversation, Product, MessageMetadata } from '../../services/api';
 
@@ -24,6 +81,7 @@ interface MessageWithMetadata extends Message {
       serviceType: string;
       [key: string]: any;
     };
+    products?: Product[];
     [key: string]: any;
   };
 }
@@ -35,6 +93,18 @@ const FloatingWidget = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const whisperRecorder = useMemo(() => {
+    return new WhisperRecorder({
+      apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || '',
+      model: 'whisper-1',
+      language: 'en'
+    });
+  }, []);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<MessageWithMetadata[]>([]);
   const safeMessages = messages || []; // Ensure messages is always an array
@@ -126,6 +196,16 @@ const FloatingWidget = () => {
     }
   };
   
+  // Cleanup function for component unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
   // Load conversation from storage on component mount
   useEffect(() => {
     const savedConversationId = getFromStorage('conversationId');
@@ -193,26 +273,36 @@ const FloatingWidget = () => {
       setLoading(false);
     }
   };
-   useEffect(() => {
-      fetch("https://vogo.family/wp-json/chatbot/v1/user", {
-        credentials: "include", // this includes WordPress login cookies
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.logged_in) {
-            console.log("Logged in user:", data);
-            // Now you can send this info to your chatbot backend (e.g., userId)
+   interface WordPressUser {
+    logged_in: boolean;
+    ID?: string | number;
+    // Add other WordPress user properties as needed
+    [key: string]: any;
+  }
 
-            
-          } else {
-            console.log("User not logged in");
-          }
-        })
-        .catch(err => console.error("Auth check failed", err));
-    }, []);
+  const [wpUser, setWpUser] = useState<WordPressUser | null>(null);
+
+  useEffect(() => {
+    fetch("https://vogo.family/wp-json/chatbot/v1/user", {
+      credentials: "include"// this includes WordPress login cookies
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Auth check response:", data);
+        if (data.logged_in) {
+          console.log("Logged in user:", data);
+          setWpUser(data);
+          // Pass the user ID to the chat component if needed
+        } else {
+          console.log("User not logged in");
+          setWpUser(null);
+        }
+      })
+      .catch(err => {
+        console.error("Auth check failed", err);
+        setWpUser(null);
+      });
+  }, []);
   // Process conversation data when it changes
   useEffect(() => {
     if (conversation) {
@@ -225,9 +315,6 @@ const FloatingWidget = () => {
         // Open the calendar URL in a new tab
         window.open(metadata.redirectUrl, '_blank', 'noopener,noreferrer');
       }
-      
-      // Update messages
-      setMessages(conversation.messages || []);
       
       // Process and update products if available
       if (conversation.foodProducts && Array.isArray(conversation.foodProducts)) {
@@ -364,10 +451,35 @@ const FloatingWidget = () => {
         });
         
         console.log('Processed products:', processedProducts);
+        
+        // Attach products to the last assistant message
+        const messages = conversation.messages || [];
+        let updatedMessages = [...messages];
+        
+        // Find the last assistant message
+        for (let i = updatedMessages.length - 1; i >= 0; i--) {
+          if (updatedMessages[i].role === 'assistant') {
+            // Attach products to this message's metadata
+            updatedMessages[i] = {
+              ...updatedMessages[i],
+              metadata: {
+                ...(updatedMessages[i].metadata || {}),
+                products: processedProducts
+              }
+            };
+            break;
+          }
+        }
+        
+        // Update messages with products attached to the relevant message
+        setMessages(updatedMessages);
+        // Keep the products state for backward compatibility
         setProducts(processedProducts);
       } else {
         console.log('No products found in conversation');
         setProducts([]);
+        // Still need to update messages
+        setMessages(conversation.messages || []);
       }
       
       // Check if an operator has been assigned
@@ -404,7 +516,8 @@ const FloatingWidget = () => {
         // Start a new conversation
 
         console.log('Starting new conversation with message:', inputValue);
-        response = await chatAPI.startConversation(inputValue);
+        // Pass the WordPress user ID if available
+        response = await chatAPI.startConversation(inputValue, wpUser?.ID);
         console.log('New conversation started:', {
           id: response._id || response.conversationId,
           messages: response.messages?.length,
@@ -433,33 +546,263 @@ const FloatingWidget = () => {
       setConversation(response);
       
       // Ensure we have the latest messages
-      const latestMessages = Array.isArray(response.messages) ? response.messages : [];
-      console.log('Setting latest messages:', latestMessages);
+      let latestMessages = Array.isArray(response.messages) ? [...response.messages] : [];
+      console.log('Processing latest messages:', latestMessages);
       
+      // Log the message state before we make any changes
+      console.log('Messages before processing metadata:', JSON.stringify(latestMessages, null, 2));
+
       // Check for redirect in the response itself (not just in messages)
       if (response.shouldRedirect && response.redirectUrl) {
         console.log('Found redirect in response:', response.redirectUrl);
-        latestMessages[latestMessages.length - 1] = {
-          ...latestMessages[latestMessages.length - 1],
-          metadata: {
-            ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
-            shouldRedirect: true,
-            redirectUrl: response.redirectUrl
-          }
-        };
-        console.log('Updated last message with redirect metadata');
+        if (latestMessages.length > 0) {
+          latestMessages[latestMessages.length - 1] = {
+            ...latestMessages[latestMessages.length - 1],
+            metadata: {
+              ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
+              shouldRedirect: true,
+              redirectUrl: response.redirectUrl
+            }
+          };
+          console.log('Updated last message with redirect metadata');
+        }
       }
       
-      setMessages(latestMessages);
+      // If there are no messages but we got products, create an assistant message
+      if (latestMessages.length === 0 && response.foodProducts && Array.isArray(response.foodProducts) && response.foodProducts.length > 0) {
+        console.log('No messages but found products, creating assistant message');
+        latestMessages.push({
+          role: 'assistant' as const,
+          content: 'I found some products that might interest you:',
+          timestamp: new Date().toISOString()
+        });
+      }
       
-      // Update products if available in the response
-      if (response.foodProducts && Array.isArray(response.foodProducts) && response.foodProducts.length > 0) {
-        console.log('Setting products from response:', response.foodProducts);
-        setProducts(response.foodProducts);
+      // Process and attach products to the latest assistant message if available
+      // Only process products if they're in the current response
+      const hasProducts = response.foodProducts && Array.isArray(response.foodProducts) && response.foodProducts.length > 0;
+      console.log('Has products in this response:', hasProducts);
+      
+      // IMPORTANT: For backward compatibility, make sure existing code paths still work
+      // Legacy code might not have the hasProducts flag, so we'll make sure to handle that
+      
+      // Generate a unique message ID for this response to properly track products
+      const responseMessageId = `msg_${Date.now()}`;
+      console.log('Generated message ID for this response:', responseMessageId);
+      
+      if (hasProducts) {
+        console.log('Found food products in response:', response.foodProducts);
+        console.log('Response structure:', JSON.stringify(response, null, 2));
+        
+        // Process the products for consistent formatting
+        // Using non-null assertion since we've already checked with hasProducts
+        const processedProducts = (response.foodProducts || []).map((product: any) => {
+          try {
+            // Handle ID - check all possible ID fields
+            const productId = (
+              product.id || 
+              product._id || 
+              product.productId || 
+              Math.random().toString(36).substr(2, 9)
+            ).toString();
+            
+            // Handle name
+            const productName = product.name || 'Unnamed Product';
+            
+            // Handle description - check all possible description fields
+            const description = (
+              product.description || 
+              product.shortDescription || 
+              product.short_description || 
+              ''
+            );
+            
+            // Handle prices - check all possible price fields
+            const salePrice = product.salePrice || product.sale_price || '';
+            const regularPrice = (
+              product.regularPrice || 
+              product.regular_price || 
+              product.price || 
+              '0'
+            );
+            const displayPrice = salePrice || regularPrice;
+            
+            // Handle images - check all possible image fields
+            let imageSrc = '';
+            const images: string[] = [];
+            
+            // Check for direct image string
+            if (typeof product.image === 'string' && product.image.trim() !== '') {
+              imageSrc = product.image;
+              images.push(imageSrc);
+            } 
+            // Check for images array
+            else if (Array.isArray(product.images) && product.images.length > 0) {
+              // Handle both string and object image formats
+              product.images.forEach((img: any) => {
+                if (typeof img === 'string' && img.trim() !== '') {
+                  images.push(img);
+                } else if (img && (img.src || img.url)) {
+                  const imgUrl = (img.src || img.url).toString().trim();
+                  if (imgUrl) {
+                    images.push(imgUrl);
+                  }
+                }
+              });
+              
+              // Set the first image as the main image if we have any
+              if (images.length > 0) {
+                imageSrc = images[0];
+              }
+            }
+            
+            // Handle categories - extract names from category objects if needed
+            const categories: string[] = [];
+            if (Array.isArray(product.categories)) {
+              product.categories.forEach((cat: any) => {
+                if (typeof cat === 'string' && cat.trim() !== '') {
+                  categories.push(cat);
+                } else if (cat && (cat.name || cat.title)) {
+                  const catName = (cat.name || cat.title).trim();
+                  if (catName) categories.push(catName);
+                }
+              });
+            }
+            
+            // Handle URL - check all possible URL fields
+            const url = (
+              product.url || 
+              product.permalink || 
+              (productId ? `#${productId}` : '#')
+            );
+            
+            // Build the final product object with proper typing
+            const processedProduct: Product & { 
+              _id: string; 
+              _original: any;
+              _error?: string;
+            } = {
+              id: productId,
+              _id: productId, // For backward compatibility
+              name: productName,
+              description: description,
+              price: displayPrice.toString(),
+              regular_price: regularPrice.toString(),
+              image: imageSrc,
+              images: images,
+              url: url,
+              categories: categories,
+              // Include all original product data for debugging
+              _original: product
+            };
+            
+            console.log('Processed product:', processedProduct);
+            return processedProduct;
+            
+          } catch (error) {
+            console.error('Error processing product:', error, 'Product data:', product);
+            // Return a minimal valid product object even if there was an error
+            const errorProductId = Math.random().toString(36).substr(2, 9);
+            return {
+              id: errorProductId,
+              _id: errorProductId,
+              name: 'Error loading product',
+              description: '',
+              price: '0',
+              regular_price: '0',
+              image: '',
+              images: [],
+              url: '#',
+              categories: [],
+              // Ensure all required fields from Product interface are present
+              _error: 'Error processing product',
+              _original: product,
+              // Add any additional required fields from the Product interface
+              short_description: '',
+              permalink: '#'
+            };
+          }
+        });
+        
+        console.log('Processed products:', processedProducts);
+        
+        // Attach products to the latest assistant message FROM THIS RESPONSE ONLY
+        // Find the most recent message from THIS response only
+        let foundAssistantMessage = false;
+        
+        console.log('About to attach products to message. Latest messages:', JSON.stringify(latestMessages, null, 2));
+        
+        for (let i = latestMessages.length - 1; i >= 0; i--) {
+          // Check if this message is a new assistant message from THIS response - using the messageId we set earlier
+          if (latestMessages[i].role === 'assistant' && latestMessages[i].metadata?.messageId === responseMessageId) {
+            console.log('Found NEW assistant message to attach products to at index:', i);
+            foundAssistantMessage = true;
+            // Tag this message with the products, keeping the messageId intact
+            latestMessages[i] = {
+              ...latestMessages[i],
+              metadata: {
+                ...(latestMessages[i].metadata || {}),
+                products: processedProducts,
+                isNewMessage: undefined // Clear the temporary flag
+              }
+            };
+            console.log('Products attached to message with ID:', latestMessages[i].metadata?.messageId);
+            break;
+          }
+        }
+        
+        // If no assistant message was found (unusual but possible), create one
+        if (!foundAssistantMessage) {
+          console.log('No assistant message found, creating one with products');
+          const newAssistantMessage: MessageWithMetadata = {
+            role: 'assistant' as const,
+            content: 'I found some products that might interest you:',
+            timestamp: new Date().toISOString(),
+            metadata: {
+              messageId: responseMessageId, // Use the same message ID as this response
+              products: processedProducts
+            }
+          };
+          latestMessages.push(newAssistantMessage);
+          console.log('Added new assistant message with products');
+        }
+        
+        // Keep products in state for backward compatibility
+        setProducts(processedProducts);
       } else {
         console.log('No products found in response');
         setProducts([]);
+        
+        // If no products in current response, make sure new assistant messages don't show products
+        if (latestMessages.length > 0) {
+          // This is a new response, so we need to mark new messages to track them
+          const isNewResponse = true;
+          
+          // Mark which messages are from this new response vs existing messages
+          latestMessages = latestMessages.map(msg => {
+            // Find existing messages that should keep their products
+            if (msg.timestamp && new Date(msg.timestamp).getTime() < Date.now() - 2000) {
+              // This is an existing message, preserve its state exactly as is
+              return msg;
+            } else {
+              // This is a new message from the current response - add a message ID
+              return {
+                ...msg,
+                metadata: {
+                  ...(msg.metadata || {}),
+                  isNewMessage: true, // Mark as a new message
+                  messageId: responseMessageId, // Associate message with this response
+                  products: undefined // New messages shouldn't have products unless explicitly provided
+                }
+              };
+            }
+          });
+        }
       }
+      
+      // Update messages with the processed messages
+      console.log('Setting final messages with attached products:', latestMessages);
+      setMessages(latestMessages);
       
       // If we're in calendar mode and have all the data, hide the calendar UI
       if (showCalendar && calendarData.date && calendarData.time && calendarData.reason) {
@@ -545,6 +888,95 @@ const FloatingWidget = () => {
       setLoading(false);
     }
   };
+
+  const stopRecording = useCallback(async () => {
+    if (!isListening) {
+      console.log('Not stopping - not currently listening');
+      return '';
+    }
+    
+    console.log('Stopping recording...');
+    setIsProcessing(true);
+    
+    try {
+      const transcription = await whisperRecorder.stopRecording();
+      console.log('Recording stopped, transcription:', transcription || '[Empty]');
+      
+      if (transcription && transcription.trim()) {
+        setInputValue(prev => {
+          const newValue = prev ? `${prev} ${transcription}`.trim() : transcription.trim();
+          console.log('Updated input value with transcription');
+          return newValue;
+        });
+      }
+      
+      setError(null);
+      return transcription || '';
+    } catch (error) {
+      console.error('Error during recording/transcription:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process recording';
+      setError(errorMessage);
+      return '';
+    } finally {
+      setIsListening(false);
+      setIsProcessing(false);
+    }
+  }, [isListening, whisperRecorder]);
+
+  const startRecording = useCallback(async () => {
+    if (isListening) {
+      console.log('Already recording, not starting again');
+      return false;
+    }
+    
+    try {
+      console.log('Starting recording...');
+      await whisperRecorder.startRecording();
+      console.log('Recording started successfully');
+      setError(null);
+      setIsListening(true);
+      
+      // Auto-stop after 30 seconds of total recording time as a safety measure
+      const safetyTimer = setTimeout(() => {
+        if (isListening) {
+          console.log('Maximum recording time reached, stopping...');
+          stopRecording();
+        }
+      }, 30000);
+      
+      return () => {
+        console.log('Cleaning up recording timer');
+        clearTimeout(safetyTimer);
+      };
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start recording';
+      setError(errorMessage);
+      setIsListening(false);
+      return false;
+    }
+  }, [isListening, whisperRecorder, stopRecording]);
+  
+  const toggleVoiceRecognition = useCallback(async () => {
+    console.log('toggleVoiceRecognition called, isListening:', isListening);
+    
+    try {
+      if (isListening) {
+        console.log('Stopping existing recording...');
+        await stopRecording();
+      } else {
+        console.log('Starting new recording...');
+        const started = await startRecording();
+        if (!started) {
+          console.log('Failed to start recording');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error in toggleVoiceRecognition:', error);
+      setError('Failed to toggle voice recording');
+    }
+  }, [isListening, whisperRecorder]);
 
   const toggleWidget = () => {
     setIsOpen(!isOpen);
@@ -766,6 +1198,64 @@ const FloatingWidget = () => {
                           {/* Use dangerouslySetInnerHTML to render markdown content properly */}
                           <p dangerouslySetInnerHTML={{ __html: formatMessage(filterProductInfo(msg.content)) }}></p>
                           
+                          {/* Display products if present in message metadata */}
+                          {msg.metadata?.products && Array.isArray(msg.metadata.products) && msg.metadata.products.length > 0 && (
+                            <div className={styles.productRecommendations}>
+                              <h4 style={{ fontSize: '14px', color: '#666', margin: '8px 4px', fontWeight: 'normal' }}>
+                                Found {msg.metadata.products.length} product{msg.metadata.products.length > 1 ? 's' : ''} for you:
+                              </h4>
+                              <div className={styles.productsGrid}>
+                                {msg.metadata.products.map((product, index) => {
+                                  // Log product info for debugging
+                                   try {
+                                    // Ensure product has required fields with proper typing
+                                    const safeProduct: Product = {
+                                      id: product.id || product._id || `product-${index}`,
+                                      name: product.name || 'Unnamed Product',
+                                      description: product.description || product.short_description || '',
+                                      price: product.price || product.regular_price || '0',
+                                      image: product.image || (product.images && Array.isArray(product.images) && product.images.length > 0 ? (typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.src) : null),
+                                      url: product.url || product.permalink || '#',
+                                      categories: Array.isArray(product.categories) 
+                                        ? product.categories 
+                                        : [],
+                                      // Include any additional fields that might be needed
+                                      _id: product._id || '',
+                                      short_description: product.short_description || '',
+                                      regular_price: product.regular_price || '',
+                                      images: product.images || [],
+                                      permalink: product.permalink || ''
+                                    };
+                                    
+                                    console.log('Using safe product:', JSON.stringify(safeProduct, null, 2));
+                                    
+                                    return (
+                                      <div key={safeProduct.id} className={styles.productCardWrapper}>
+                                        <ProductCard key={safeProduct.id} product={safeProduct} compact={true} />
+                                      </div>
+                                    );
+                                  } catch (error) {
+                                    console.error('Error rendering product card:', error, product);
+                                    return (
+                                      <div key={`error-${index}`} className={styles.productError}>
+                                        <p>Could not display product: {product.name || 'Unknown'}</p>
+                                        <p>Price: {product.price || product.regular_price || 'N/A'}</p>
+                                        {(product.url || product.permalink) && (product.url || product.permalink) !== '#' && (
+                                          <a href={product.url || product.permalink} target="_blank" rel="noopener noreferrer">
+                                            View Product
+                                          </a>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                })}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                                {msg.metadata.products.length > 2 ? 'Scroll horizontally to see more products' : ''}
+                              </div>
+                            </div>
+                          )}
+                          
                           {/* Render action buttons if available */}
                           {msg.metadata?.actions && Array.isArray(msg.metadata.actions) && msg.metadata.actions.length > 0 && (
                             <div className={styles.actionButtons}>
@@ -808,6 +1298,10 @@ const FloatingWidget = () => {
                       <div className={`${styles.messageContent} ${styles.systemMessage}`}>
                         <p>{msg.content}</p>
                       </div>
+                    ) : msg.role === 'operator' ? (
+                      <div className={`${styles.messageContent} ${styles.operatorMessage}`}>
+                        <p>{msg.content}</p>
+                      </div>
                     ) : (
                       <div className={`${styles.messageContent} ${styles.operatorMessage}`}>
                         <p>{msg.content}</p>
@@ -816,54 +1310,7 @@ const FloatingWidget = () => {
                   </div>
                 ))}
                 
-                {/* Display product recommendations */}
-                {products.length > 0 && (
-                  <div className={styles.productRecommendations}>
-                    <h4 style={{ fontSize: '14px', color: '#666', margin: '8px 0' }}>Found {products.length} products for you:</h4>
-                    <div className={styles.productsGrid}>
-                      {products.map((product, index) => {
-                        console.log(`Rendering product ${index + 1}/${products.length}:`, product);
-                        try {
-                          // Ensure product has required fields with proper typing
-                          const safeProduct: Product = {
-                            id: product.id || `product-${index}`,
-                            name: product.name || 'Unnamed Product',
-                            description: product.description || '',
-                            price: product.price || '0',
-                            image: product.image || null,
-                            url: product.url || '#',
-                            categories: Array.isArray(product.categories) 
-                              ? product.categories 
-                              : [],
-                            // Include any additional fields that might be needed
-                            _id: product._id,
-                            short_description: product.short_description,
-                            regular_price: product.regular_price,
-                            images: product.images,
-                            permalink: product.permalink
-                          };
-                          return <ProductCard key={safeProduct.id} product={safeProduct} />;
-                        } catch (error) {
-                          console.error('Error rendering product card:', error, product);
-                          return (
-                            <div key={`error-${index}`} className={styles.productError}>
-                              <p>Could not display product: {product.name || 'Unknown'}</p>
-                              <p>Price: {product.price || 'N/A'}</p>
-                              {product.url && product.url !== '#' && (
-                                <a href={product.url} target="_blank" rel="noopener noreferrer">
-                                  View Product
-                                </a>
-                              )}
-                            </div>
-                          );
-                        }
-                      })}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-                      {products.length > 2 ? 'Scroll horizontally to see more products' : ''}
-                    </div>
-                  </div>
-                )}
+                {/* Products are now displayed within their associated message */}
                 
                 {/* Calendar scheduling UI */}
                 {showCalendar && (
@@ -918,8 +1365,47 @@ const FloatingWidget = () => {
                   placeholder="Tell us how we can help..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (inputValue.trim() && !loading) {
+                        handleSubmit(e as any);
+                      }
+                    }
+                  }}
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  className={`${styles.voiceButton} ${isListening ? styles.listening : ''} ${isProcessing ? styles.processing : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleVoiceRecognition();
+                  }}
+                  title={isListening ? 'Stop listening' : 'Start voice input'}
+                  disabled={loading || isProcessing}
+                  aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+                  aria-busy={isProcessing}
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                  {isListening && <span className={styles.recordingPulse}></span>}
+                </button>
                 <button 
                   type="submit" 
                   className={styles.sendButton}

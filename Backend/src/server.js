@@ -8,7 +8,6 @@ const rateLimit = require('express-rate-limit');
 
 // Import config
 const connectDB = require('./config/database');
-const connectRedis = require('./config/redis');
 const logger = require('./utils/logger');
 
 // Import routes
@@ -25,13 +24,21 @@ const { initCronJobs } = require('./utils/cronJobs');
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
-const allowedOrigins = [
-  'https://vogo-five.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'https://vogo-backend.vercel.app'
-];
 
+// CORS configuration
+const corsOptions = {
+  origin: ['http://localhost:3000', 'https://vogo-five.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
+  exposedHeaders: ['Content-Range', 'X-Total-Count'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
 app.use(helmet());
 app.use(morgan('dev', { stream: logger.stream }));
 app.use(bodyParser.json());
@@ -49,20 +56,7 @@ app.use('/api', limiter);
 // Connect to MongoDB
 connectDB();
 
-// Initialize Redis
-const initRedis = async () => {
-  try {
-    const redisClient = await connectRedis();
-    // Export Redis client for global use
-    global.redisClient = redisClient;
-    logger.info('Redis client initialized and set globally');
-  } catch (error) {
-    logger.error('Failed to initialize Redis client:', error);
-  }
-};
 
-// Initialize Redis asynchronously
-initRedis();
 
 // Routes
 app.use('/api/auth', authRoutes);
