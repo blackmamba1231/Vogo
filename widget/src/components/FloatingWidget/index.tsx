@@ -132,31 +132,61 @@ const FloatingWidget = () => {
     
     if (shouldRedirect && redirectUrl) {
       console.log('Attempting to redirect to:', redirectUrl);
+      
+      // First, try to notify the parent window if we're in an iframe
+      try {
+        if (window.parent && window.parent !== window) {
+          console.log('Widget is in iframe, sending message to parent');
+          window.parent.postMessage({
+            type: 'VOGO_WIDGET_REDIRECT',
+            url: redirectUrl
+          }, '*');
+        }
+      } catch (e) {
+        console.error('Error sending postMessage to parent:', e);
+      }
+      
       // Add a small delay to allow the UI to update
       const timer = setTimeout(() => {
         console.log('Opening URL in new tab:', redirectUrl);
-        // Try to open in a new tab
-        const newWindow = window.open(redirectUrl, '_blank', 'noopener,noreferrer');
         
-        // If popup was blocked, update the message with a clickable link
-        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-          console.log('Popup was blocked, updating message with clickable link');
-          setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages];
-            const lastIndex = updatedMessages.length - 1;
-            if (lastIndex >= 0) {
-              updatedMessages[lastIndex] = {
-                ...updatedMessages[lastIndex],
-                content: `Your appointment was scheduled! Click here to view in Google Calendar: <a href="${redirectUrl}" target="_blank" rel="noopener noreferrer" style="color: #0070f3; text-decoration: underline;">Open Calendar</a>`,
-                metadata: {
-                  ...(updatedMessages[lastIndex].metadata || {}),
-                  shouldRedirect: false, // Prevent infinite redirect attempts
-                  redirectUrl: undefined
-                }
-              };
-            }
-            return updatedMessages;
-          });
+        // Try to directly change location if we're in the top window
+        if (window === window.top) {
+          try {
+            console.log('Widget is in top window, redirecting directly');
+            window.location.href = redirectUrl;
+            return;
+          } catch (e) {
+            console.error('Error redirecting directly:', e);
+          }
+        }
+        
+        // If direct redirect didn't work, try to open in a new tab
+        try {
+          const newWindow = window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+          
+          // If popup was blocked, update the message with clickable link
+          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            console.log('Popup was blocked, updating message with clickable link');
+            setMessages(prevMessages => {
+              const updatedMessages = [...prevMessages];
+              const lastIndex = updatedMessages.length - 1;
+              if (lastIndex >= 0) {
+                updatedMessages[lastIndex] = {
+                  ...updatedMessages[lastIndex],
+                  content: `Your appointment was scheduled! <a href="${redirectUrl}" target="_blank" rel="noopener noreferrer" style="color: #0070f3; text-decoration: underline; font-weight: bold;">Click here to view in Google Calendar</a>`,
+                  metadata: {
+                    ...(updatedMessages[lastIndex].metadata || {}),
+                    shouldRedirect: false, // Prevent infinite redirect attempts
+                    redirectUrl: undefined
+                  }
+                };
+              }
+              return updatedMessages;
+            });
+          }
+        } catch (e) {
+          console.error('Error opening new tab:', e);
         }
       }, 1000);
       return () => clearTimeout(timer);
