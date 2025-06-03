@@ -65,17 +65,17 @@ export interface Product {
 // API methods
 export const chatAPI = {
   // Start a new conversation
-  startConversation: async (initialMessage: string, userId?: string | number): Promise<Conversation> => {
+  startConversation: async (initialMessage: string, wpUserId?: string | number): Promise<Conversation> => {
     try {
       const sessionId = getSessionId();
       
-      const requestBody: { initialMessage: string; sessionId: string; userId?: string | number } = { 
+      const requestBody: { initialMessage: string; sessionId: string; wpUserId?: string | number } = { 
         initialMessage, 
         sessionId 
       };
       
-      if (userId) {
-        requestBody.userId = userId;
+      if (wpUserId) {
+        requestBody.wpUserId = wpUserId;
       }
       
       const response = await fetch(`${BASE_URL}${API_CONFIG.endpoints.chat.start}`, {

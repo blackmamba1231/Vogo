@@ -22,7 +22,7 @@ const conversationSchema = new mongoose.Schema({
     default: null
   },
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'User'
   },
   sessionId: {
