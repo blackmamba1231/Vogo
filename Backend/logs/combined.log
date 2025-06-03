@@ -4134,3 +4134,21 @@
 {"level":"error","message":"WooCommerce: Get all products error: getaddrinfo ENOTFOUND vogo.family","service":"vogo-backend","timestamp":"2025-06-01 08:30:00"}
 {"level":"warn","message":"WooCommerce Sync: No products retrieved for page 2","service":"vogo-backend","timestamp":"2025-06-01 08:30:00"}
 {"level":"info","message":"Server running on port 3001 in development mode","service":"vogo-backend","timestamp":"2025-06-03 12:27:21"}
+{"level":"info","message":"Server running on port 3001 in development mode","service":"vogo-backend","timestamp":"2025-06-03 13:48:46"}
+{"level":"warn","message":"Global Redis client not available in OpenAI service","service":"vogo-backend","timestamp":"2025-06-03 13:51:54"}
+{"level":"info","message":"WooCommerce Local: Searching for products with query=\"pizza\", category=\"\", perPage=10","service":"vogo-backend","timestamp":"2025-06-03 13:52:16"}
+{"level":"info","message":"WooCommerce Local: Found 10 products","service":"vogo-backend","timestamp":"2025-06-03 13:52:16"}
+{"level":"warn","message":"Global Redis client not available in OpenAI service","service":"vogo-backend","timestamp":"2025-06-03 13:52:19"}
+{"level":"info","message":"\u001b[0mPOST /api/chat/start \u001b[32m200\u001b[0m 27643.348 ms - 3441\u001b[0m","service":"vogo-backend","timestamp":"2025-06-03 13:52:20"}
+{"level":"info","message":"WooCommerce Sync: Starting incremental product sync (page 1)","service":"vogo-backend","timestamp":"2025-06-03 14:00:00"}
+{"level":"info","message":"WooCommerce: Getting all products, page=1, perPage=50","service":"vogo-backend","timestamp":"2025-06-03 14:00:00"}
+{"level":"info","message":"WooCommerce: Creating API client for baseURL=https://vogo.family","service":"vogo-backend","timestamp":"2025-06-03 14:00:00"}
+{"level":"debug","message":"WooCommerce: Using consumer key: ****2e62","service":"vogo-backend","timestamp":"2025-06-03 14:00:00"}
+{"level":"info","message":"WooCommerce: Retrieved 50 products from page 1","service":"vogo-backend","timestamp":"2025-06-03 14:00:03"}
+{"level":"info","message":"WooCommerce Sync: Incremental product sync completed. Page 1/74, Created: 0, Updated: 50","service":"vogo-backend","timestamp":"2025-06-03 14:00:12"}
+{"level":"info","message":"WooCommerce Sync: Starting incremental product sync (page 2)","service":"vogo-backend","timestamp":"2025-06-03 14:30:00"}
+{"level":"info","message":"WooCommerce: Getting all products, page=2, perPage=50","service":"vogo-backend","timestamp":"2025-06-03 14:30:00"}
+{"level":"info","message":"WooCommerce: Creating API client for baseURL=https://vogo.family","service":"vogo-backend","timestamp":"2025-06-03 14:30:00"}
+{"level":"debug","message":"WooCommerce: Using consumer key: ****2e62","service":"vogo-backend","timestamp":"2025-06-03 14:30:00"}
+{"level":"info","message":"WooCommerce: Retrieved 50 products from page 2","service":"vogo-backend","timestamp":"2025-06-03 14:30:04"}
+{"level":"info","message":"WooCommerce Sync: Incremental product sync completed. Page 2/74, Created: 0, Updated: 50","service":"vogo-backend","timestamp":"2025-06-03 14:30:13"}
