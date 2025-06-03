@@ -168,37 +168,41 @@ const FloatingWidget = () => {
           console.log('Not in an iframe, will open in new tab');
         }
         
-        // If direct redirect didn't work, try to open in a new tab
-        try {
-          const newWindow = window.open(redirectUrl, '_blank', 'noopener,noreferrer');
-          
-          // If popup was blocked, update the message with clickable link
-          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-            console.log('Popup was blocked, updating message with clickable link');
-            setMessages(prevMessages => {
-              const updatedMessages = [...prevMessages];
-              const lastIndex = updatedMessages.length - 1;
-              if (lastIndex >= 0) {
-                updatedMessages[lastIndex] = {
-                  ...updatedMessages[lastIndex],
-                  content: `Your appointment was scheduled! <a href="${redirectUrl}" target="_blank" rel="noopener noreferrer" style="color: #0070f3; text-decoration: underline; font-weight: bold;">Click here to view in Google Calendar</a>`,
-                  metadata: {
-                    ...(updatedMessages[lastIndex].metadata || {}),
-                    shouldRedirect: false, // Prevent infinite redirect attempts
-                    redirectUrl: undefined
-                  }
-                };
-              }
-              return updatedMessages;
-            });
+        // Add a small delay to ensure the UI has updated
+        const timer = setTimeout(() => {
+          // If direct redirect didn't work, try to open in a new tab
+          try {
+            const newWindow = window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+            
+            // If popup was blocked, update the message with clickable link
+            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+              console.log('Popup was blocked, updating message with clickable link');
+              setMessages(prevMessages => {
+                const updatedMessages = [...prevMessages];
+                const lastIndex = updatedMessages.length - 1;
+                if (lastIndex >= 0) {
+                  updatedMessages[lastIndex] = {
+                    ...updatedMessages[lastIndex],
+                    content: `Your appointment was scheduled! <a href="${redirectUrl}" target="_blank" rel="noopener noreferrer" style="color: #0070f3; text-decoration: underline; font-weight: bold;">Click here to view in Google Calendar</a>`,
+                    metadata: {
+                      ...(updatedMessages[lastIndex].metadata || {}),
+                      shouldRedirect: false, // Prevent infinite redirect attempts
+                      redirectUrl: undefined
+                    }
+                  };
+                }
+                return updatedMessages;
+              });
+            }
+          } catch (e) {
+            console.error('Error opening new tab:', e);
           }
-        } catch (e) {
-          console.error('Error opening new tab:', e);
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
+      }
     }
-  }, [messages]);
+  }, [messages, setMessages]);
 
   // Handle action button clicks
   const handleActionClick = (action: string, metadata?: MessageWithMetadata['metadata']) => {
@@ -1300,10 +1304,14 @@ const FloatingWidget = () => {
                                 rel="noopener noreferrer"
                                 className={styles.calendarButton}
                                 onClick={(e) => {
+                                  const redirectUrl = msg.metadata?.redirectUrl;
+                                  const googleCalendarLink = msg.metadata?.appointmentDetails?.googleCalendarLink;
+                                  const finalUrl = redirectUrl || googleCalendarLink || '';
+                                  
                                   console.log('Calendar button clicked', {
-                                    redirectUrl: msg.metadata?.redirectUrl,
-                                    googleCalendarLink: msg.metadata?.appointmentDetails?.googleCalendarLink,
-                                    finalUrl: msg.metadata.redirectUrl || msg.metadata.appointmentDetails?.googleCalendarLink
+                                    redirectUrl,
+                                    googleCalendarLink,
+                                    finalUrl
                                   });
                                 }}
                               >
