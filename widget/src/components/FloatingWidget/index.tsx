@@ -119,16 +119,23 @@ const FloatingWidget = () => {
 
   // Handle auto-redirect when shouldRedirect is true
   useEffect(() => {
+    // Get the last message and check for redirect metadata
     const lastMessage = messages[messages.length - 1] as MessageWithMetadata | undefined;
     console.log('Last message:', lastMessage);
     
+    // Check for redirect in message metadata
     const metadata = lastMessage?.metadata;
     console.log('Message metadata:', metadata);
     
-    const redirectUrl = metadata?.redirectUrl;
-    const shouldRedirect = metadata?.shouldRedirect;
+    // Check for redirect in appointment details if present
+    const appointmentDetails = metadata?.appointmentDetails;
+    const calendarLink = appointmentDetails?.googleCalendarLink;
     
-    console.log('Redirect check:', { shouldRedirect, redirectUrl });
+    // Determine the redirect URL from any available source
+    const redirectUrl = metadata?.redirectUrl || calendarLink || '';
+    const shouldRedirect = metadata?.shouldRedirect || !!calendarLink;
+    
+    console.log('Redirect check:', { shouldRedirect, redirectUrl, calendarLink });
     
     if (shouldRedirect && redirectUrl) {
       console.log('Attempting to redirect to:', redirectUrl);
@@ -619,8 +626,8 @@ const FloatingWidget = () => {
       
       // If we have an aiResponse, make sure it gets added to the messages
       if (response.aiResponse) {
-        const aiResponseMessage = {
-          role: 'assistant',
+        const aiResponseMessage: Message = {
+          role: 'assistant' as const, // Explicitly type as 'assistant'
           content: response.aiResponse.content,
           metadata: response.aiResponse.metadata,
           timestamp: new Date().toISOString(),

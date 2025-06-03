@@ -36,6 +36,11 @@ export interface Conversation {
   redirectUrl?: string;
   isAppointmentScheduled?: boolean;
   appointmentDetails?: any;
+  // AI response from the backend
+  aiResponse?: {
+    content: string;
+    metadata?: MessageMetadata;
+  };
   actions?: Array<{
     type: 'link' | 'button';
     text: string;
