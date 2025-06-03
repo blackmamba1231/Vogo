@@ -578,70 +578,61 @@ const FloatingWidget = () => {
       // Update conversation state with the latest response
       setConversation(response);
       
+      // Check for redirect information in the response
+      // If we find it, add it directly to the response.aiResponse object
+      if (response.aiResponse) {
+        // Check for appointment details in the response
+        const appointmentDetails = response.aiResponse?.metadata?.appointmentDetails;
+        const calendarLink = appointmentDetails?.googleCalendarLink || '';
+        
+        if (calendarLink) {
+          console.log('Found calendar link in appointment details:', calendarLink);
+          
+          // Modify the response content directly to include the button
+          response.aiResponse.content = `${response.aiResponse.content} <div style="margin-top: 10px;"><a href="${calendarLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`;
+          
+          // Make sure the metadata has the redirect information
+          if (!response.aiResponse.metadata) {
+            response.aiResponse.metadata = {};
+          }
+          
+          response.aiResponse.metadata.shouldRedirect = true;
+          response.aiResponse.metadata.redirectUrl = calendarLink;
+          
+          console.log('Updated response with calendar button');
+        }
+        // Check for direct redirect information
+        else if (response.aiResponse.metadata?.shouldRedirect && response.aiResponse.metadata?.redirectUrl) {
+          const redirectUrl = response.aiResponse.metadata.redirectUrl;
+          console.log('Found redirect URL in response metadata:', redirectUrl);
+          
+          // Add the button to the response content
+          response.aiResponse.content = `${response.aiResponse.content} <div style="margin-top: 10px;"><a href="${redirectUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`;
+          
+          console.log('Updated response with redirect button');
+        }
+      }
+      
       // Ensure we have the latest messages
       let latestMessages = Array.isArray(response.messages) ? [...response.messages] : [];
       console.log('Processing latest messages:', latestMessages);
       
-      // Log the message state before we make any changes
-      console.log('Messages before processing metadata:', JSON.stringify(latestMessages, null, 2));
-
-      // Check for redirect in the response itself (not just in messages)
-      // Also check for metadata in the last message from the response
-      const lastResponseMessage = latestMessages.length > 0 ? latestMessages[latestMessages.length - 1] : null;
-      
-      // Log all potential sources of redirect information
-      console.log('Response object redirect info:', {
-        shouldRedirect: response.shouldRedirect,
-        redirectUrl: response.redirectUrl
-      });
-      
-      if (lastResponseMessage?.metadata) {
-        console.log('Last message metadata:', lastResponseMessage.metadata);
-      }
-      
-      // Check if the last message has metadata with appointment details
-      if (lastResponseMessage?.metadata?.appointmentDetails?.googleCalendarLink) {
-        const calendarLink = lastResponseMessage.metadata.appointmentDetails.googleCalendarLink;
-        console.log('Found calendar link in appointment details:', calendarLink);
+      // If we have an aiResponse, make sure it gets added to the messages
+      if (response.aiResponse) {
+        const aiResponseMessage = {
+          role: 'assistant',
+          content: response.aiResponse.content,
+          metadata: response.aiResponse.metadata,
+          timestamp: new Date().toISOString(),
+          _id: `msg_${Date.now()}`
+        };
         
-        // Add redirect info to the message metadata
-        latestMessages[latestMessages.length - 1] = {
-          ...latestMessages[latestMessages.length - 1],
-          content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${calendarLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`,
-          metadata: {
-            ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
-            shouldRedirect: true,
-            redirectUrl: calendarLink
-          }
-        };
-        console.log('Updated last message with calendar link and button');
+        console.log('Adding AI response to messages:', aiResponseMessage);
+        latestMessages.push(aiResponseMessage);
       }
-      // Check for redirect in the response itself
-      else if (response.shouldRedirect && response.redirectUrl) {
-        console.log('Found redirect in response object:', response.redirectUrl);
-        if (latestMessages.length > 0) {
-          latestMessages[latestMessages.length - 1] = {
-            ...latestMessages[latestMessages.length - 1],
-            content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${response.redirectUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`,
-            metadata: {
-              ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
-              shouldRedirect: true,
-              redirectUrl: response.redirectUrl
-            }
-          };
-          console.log('Updated last message with redirect button');
-        }
-      }
-      // Check if metadata exists in the last message
-      else if (lastResponseMessage?.metadata?.shouldRedirect && lastResponseMessage?.metadata?.redirectUrl) {
-        console.log('Found redirect in message metadata:', lastResponseMessage.metadata.redirectUrl);
-        // Add a button to the message content
-        latestMessages[latestMessages.length - 1] = {
-          ...latestMessages[latestMessages.length - 1],
-          content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${lastResponseMessage.metadata.redirectUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`
-        };
-        console.log('Added button to message with existing redirect metadata');
-      }
+      
+      // Log the message state
+      console.log('Messages after processing metadata:', JSON.stringify(latestMessages, null, 2));
       
       // If there are no messages but we got products, create an assistant message
       if (latestMessages.length === 0 && response.foodProducts && Array.isArray(response.foodProducts) && response.foodProducts.length > 0) {
