@@ -812,7 +812,8 @@ try {
                 ...appointment.toObject(),
                 formattedDate,
                 formattedTime,
-                timeZone: eventDetails.timeZone
+                timeZone: eventDetails.timeZone,
+                googleCalendarLink: appointment.googleCalendarLink || ''
               },
               actions: [
                 {

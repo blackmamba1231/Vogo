@@ -586,19 +586,61 @@ const FloatingWidget = () => {
       console.log('Messages before processing metadata:', JSON.stringify(latestMessages, null, 2));
 
       // Check for redirect in the response itself (not just in messages)
-      if (response.shouldRedirect && response.redirectUrl) {
-        console.log('Found redirect in response:', response.redirectUrl);
+      // Also check for metadata in the last message from the response
+      const lastResponseMessage = latestMessages.length > 0 ? latestMessages[latestMessages.length - 1] : null;
+      
+      // Log all potential sources of redirect information
+      console.log('Response object redirect info:', {
+        shouldRedirect: response.shouldRedirect,
+        redirectUrl: response.redirectUrl
+      });
+      
+      if (lastResponseMessage?.metadata) {
+        console.log('Last message metadata:', lastResponseMessage.metadata);
+      }
+      
+      // Check if the last message has metadata with appointment details
+      if (lastResponseMessage?.metadata?.appointmentDetails?.googleCalendarLink) {
+        const calendarLink = lastResponseMessage.metadata.appointmentDetails.googleCalendarLink;
+        console.log('Found calendar link in appointment details:', calendarLink);
+        
+        // Add redirect info to the message metadata
+        latestMessages[latestMessages.length - 1] = {
+          ...latestMessages[latestMessages.length - 1],
+          content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${calendarLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`,
+          metadata: {
+            ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
+            shouldRedirect: true,
+            redirectUrl: calendarLink
+          }
+        };
+        console.log('Updated last message with calendar link and button');
+      }
+      // Check for redirect in the response itself
+      else if (response.shouldRedirect && response.redirectUrl) {
+        console.log('Found redirect in response object:', response.redirectUrl);
         if (latestMessages.length > 0) {
           latestMessages[latestMessages.length - 1] = {
             ...latestMessages[latestMessages.length - 1],
+            content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${response.redirectUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`,
             metadata: {
               ...(latestMessages[latestMessages.length - 1]?.metadata || {}),
               shouldRedirect: true,
               redirectUrl: response.redirectUrl
             }
           };
-          console.log('Updated last message with redirect metadata');
+          console.log('Updated last message with redirect button');
         }
+      }
+      // Check if metadata exists in the last message
+      else if (lastResponseMessage?.metadata?.shouldRedirect && lastResponseMessage?.metadata?.redirectUrl) {
+        console.log('Found redirect in message metadata:', lastResponseMessage.metadata.redirectUrl);
+        // Add a button to the message content
+        latestMessages[latestMessages.length - 1] = {
+          ...latestMessages[latestMessages.length - 1],
+          content: `${latestMessages[latestMessages.length - 1].content} <div style="margin-top: 10px;"><a href="${lastResponseMessage.metadata.redirectUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: #4285F4; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">📅 View in Calendar</a></div>`
+        };
+        console.log('Added button to message with existing redirect metadata');
       }
       
       // If there are no messages but we got products, create an assistant message
