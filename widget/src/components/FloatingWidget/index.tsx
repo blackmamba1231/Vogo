@@ -1269,7 +1269,21 @@ const FloatingWidget = () => {
                         </div>
                         <div>
                           {/* Use dangerouslySetInnerHTML to render markdown content properly */}
-                          <p dangerouslySetInnerHTML={{ __html: formatMessage(filterProductInfo(msg.content)) }}></p>
+                          <div className={styles.messageText} dangerouslySetInnerHTML={{ __html: formatMessage(filterProductInfo(msg.content)) }}></div>
+                          
+                          {/* Display calendar button if redirect URL is available */}
+                          {(msg.metadata?.shouldRedirect && msg.metadata?.redirectUrl) && (
+                            <div className={styles.calendarButtonContainer}>
+                              <a 
+                                href={msg.metadata.redirectUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className={styles.calendarButton}
+                              >
+                                📅 View in Calendar
+                              </a>
+                            </div>
+                          )}
                           
                           {/* Display products if present in message metadata */}
                           {msg.metadata?.products && Array.isArray(msg.metadata.products) && msg.metadata.products.length > 0 && (

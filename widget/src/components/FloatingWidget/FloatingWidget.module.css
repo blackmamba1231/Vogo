@@ -490,6 +490,37 @@
   overflow: hidden;
 }
 
+.messageText {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.calendarButtonContainer {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.calendarButton {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: #4285F4;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+.calendarButton:hover {
+  background-color: #3367d6;
+  color: white;
+  text-decoration: none;
+}
+
 .userMessage .messageContent {
   background-color: #006633;
   color: white;
