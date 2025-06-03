@@ -517,7 +517,10 @@ const FloatingWidget = () => {
 
         console.log('Starting new conversation with message:', inputValue);
         // Pass the WordPress user ID if available
-        response = await chatAPI.startConversation(inputValue, wpUser?.ID);
+        const userId = wpUser?.user_id;
+        console.log('User ID:', userId);
+        
+        response = await chatAPI.startConversation(inputValue, userId);
         console.log('New conversation started:', {
           id: response._id || response.conversationId,
           messages: response.messages?.length,

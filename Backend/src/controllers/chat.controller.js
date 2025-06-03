@@ -42,14 +42,14 @@ exports.startConversation = async (req, res) => {
       });
     }
     const sessionId = uuidv4();
-    
+    console.log(req.body.userId);
     // Detect language of initial message
     const language = await openAIService.detectLanguage(initialMessage);
     console.log('Language detected:', language);
     // Create new conversation with user ID if provided
     const conversationData = {
       sessionId,
-      ...(req.body.wpUserId && { userId: req.body.wpUserId }),
+      ...(req.body.userId && { userId: req.body.userId }),
       language,
       messages: [
         {
