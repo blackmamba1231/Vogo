@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vogo.Family Widget Embed for WooCommerce</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #30653e;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .note {
+      background-color: #fff8e1;
+      padding: 15px;
+      border-left: 4px solid #ffc107;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vogo.Family Widget Embed for WooCommerce</h1>
+  
+  <p>This is the recommended embed code for your WooCommerce site:</p>
+  
+  <div class="note">
+    <strong>Important:</strong> Use this exact code in your WooCommerce footer to avoid blank page issues.
+  </div>
+  
+  <pre><code>&lt;!-- Vogo.Family Chat Widget --&gt;
+&lt;div id="vogo-chat-root"&gt;&lt;/div&gt;
+&lt;link href="https://vogo-chatbot.vogo.family/_next/static/css/e60b2bb6c1978960.css" rel="stylesheet"&gt;
+&lt;script&gt;
+// Simple script to load the chunk with a self-invoking wrapper
+(function() {
+  // Create the root element if it doesn't exist
+  if (!document.getElementById('vogo-chat-root')) {
+    const root = document.createElement('div');
+    root.id = 'vogo-chat-root';
+    document.body.appendChild(root);
+  }
+
+  // The URL of the chunk to wrap
+  const chunkUrl = 'https://vogo-chatbot.vogo.family/_next/static/chunks/4bd1b696-640aabc2b96c0448.js';
+  
+  // Fetch the chunk content
+  fetch(chunkUrl)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch chunk: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(chunkContent => {
+      // Create a new script element with the wrapped content
+      const script = document.createElement('script');
+      script.textContent = `(function(){${chunkContent}})();`;
+      
+      // Add it to the document
+      document.head.appendChild(script);
+      console.log('Chunk wrapped and executed with self-invoking function');
+    })
+    .catch(error => {
+      console.error('Error wrapping chunk:', error);
+    });
+})();
+&lt;/script&gt;</code></pre>
+
+  <h2>How It Works</h2>
+  <p>This embed code:</p>
+  <ol>
+    <li>Creates a container for your widget</li>
+    <li>Loads your CSS file</li>
+    <li>Fetches your JavaScript chunk</li>
+    <li>Wraps it in a self-invoking function <code>(function(){...})();</code></li>
+    <li>Executes it properly to render your widget</li>
+  </ol>
+  
+  <p>This approach prevents conflicts with your WooCommerce site's JavaScript and ensures proper rendering.</p>
+</body>
+</html>
