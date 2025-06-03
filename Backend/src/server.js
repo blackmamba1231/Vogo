@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 3001;
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://vogo-five.vercel.app', 'https://vogo-vwtu.vercel.app'],
+  origin: ['http://localhost:3000', 'https://vogo-five.vercel.app', 'https://vogo-vwtu.vercel.app', 'https://vogo-chatbot.vogo.family'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
   exposedHeaders: ['Content-Range', 'X-Total-Count'],
