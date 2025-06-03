@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vogo.Family Chat Widget - Direct Embed Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #30653e;
+    }
+    .demo-content {
+      margin-bottom: 300px;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .note {
+      background-color: #fff8e1;
+      padding: 15px;
+      border-left: 4px solid #ffc107;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vogo.Family Chat Widget - Direct Embed Demo</h1>
+  
+  <div class="demo-content">
+    <p>This page demonstrates how to embed the Vogo.Family Chat Widget directly on your website.</p>
+    
+    <div class="note">
+      <strong>Note:</strong> The widget should appear in the bottom right corner of this page.
+    </div>
+    
+    <h2>How to Embed the Widget</h2>
+    <p>To embed the widget on your website, add the following code just before the closing <code>&lt;/body&gt;</code> tag:</p>
+    
+    <pre><code>&lt;!-- Vogo.Family Chat Widget --&gt;
+&lt;div id="vogo-chat-root"&gt;&lt;/div&gt;
+&lt;link href="https://vogo-chatbot.vogo.family/_next/static/css/e60b2bb6c1978960.css" rel="stylesheet"&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/_next/static/chunks/webpack-4cdc0867cc5dd3b0.js"&gt;&lt;/script&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/_next/static/chunks/4bd1b696-640aabc2b96c0448.js"&gt;&lt;/script&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/_next/static/chunks/684-f668407047b25d15.js"&gt;&lt;/script&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/_next/static/chunks/main-app-116ab2d175890b3e.js"&gt;&lt;/script&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/_next/static/chunks/app/page-231765ea69699e49.js"&gt;&lt;/script&gt;
+&lt;script src="https://vogo-chatbot.vogo.family/initialize-widget.js"&gt;&lt;/script&gt;</code></pre>
+    
+    <h2>Important Notes</h2>
+    <ul>
+      <li>The widget requires all the scripts to be loaded in the correct order.</li>
+      <li>The <code>initialize-widget.js</code> script is responsible for properly rendering the widget.</li>
+      <li>Make sure the <code>vogo-chat-root</code> div exists in your HTML before the scripts run.</li>
+    </ul>
+  </div>
+  
+  <!-- Vogo.Family Chat Widget -->
+  <div id="vogo-chat-root"></div>
+  <link href="https://vogo-chatbot.vogo.family/_next/static/css/e60b2bb6c1978960.css" rel="stylesheet">
+  <script src="https://vogo-chatbot.vogo.family/_next/static/chunks/webpack-4cdc0867cc5dd3b0.js"></script>
+  <script src="https://vogo-chatbot.vogo.family/_next/static/chunks/4bd1b696-640aabc2b96c0448.js"></script>
+  <script src="https://vogo-chatbot.vogo.family/_next/static/chunks/684-f668407047b25d15.js"></script>
+  <script src="https://vogo-chatbot.vogo.family/_next/static/chunks/main-app-116ab2d175890b3e.js"></script>
+  <script src="https://vogo-chatbot.vogo.family/_next/static/chunks/app/page-231765ea69699e49.js"></script>
+  <script src="https://vogo-chatbot.vogo.family/initialize-widget.js"></script>
+</body>
+</html>

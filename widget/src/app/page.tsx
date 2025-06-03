@@ -1,48 +1,57 @@
 'use client';
-import dynamic from "next/dynamic";
+
+import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 
-// Dynamically import the widget to avoid SSR issues
-const FloatingWidget = dynamic(() => import('@/components/FloatingWidget'), { ssr: false });
+// Import the FloatingWidget component with SSR disabled
+const FloatingWidget = dynamic(() => import('@/components/FloatingWidget'), {
+  ssr: false,
+});
+
+// Declare global window interface extension
+declare global {
+  interface Window {
+    VogoWidget: any;
+  }
+}
 
 export default function Home() {
- 
-  
-  // Handle communication with parent window when embedded
   useEffect(() => {
-    // Only run in client side
-    if (typeof window === 'undefined') return;
+    // Export the component globally for direct embedding
+    if (typeof window !== 'undefined') {
+      window.VogoWidget = FloatingWidget;
+    }
     
-    // Check if we're in an iframe
-    const isInIframe = window.self !== window.top;
-    
-    // Setup resize handler for responsive behavior
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 480;
-      
-      // Notify parent window about resize if in iframe
-      if (isInIframe) {
-        window.parent.postMessage({
-          type: 'vogo_widget_resize',
-          isMobile
-        }, '*');
+    // Handle communication with parent window (if in iframe)
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'resize') {
+        // Send height to parent window
+        if (window.parent !== window) {
+          window.parent.postMessage(
+            { height: document.body.scrollHeight },
+            '*'
+          );
+        }
       }
     };
-    
-    // Initial check
-    handleResize();
-    
-    // Listen for resize events
-    window.addEventListener('resize', handleResize);
-    
+
+    window.addEventListener('message', handleMessage);
+
+    // Initial height message
+    if (window.parent !== window) {
+      window.parent.postMessage(
+        { height: document.body.scrollHeight },
+        '*'
+      );
+    }
+
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('message', handleMessage);
     };
   }, []);
-  
+
   return (
-    <main className="min-h-screen ">
-      {/* The widget itself */}
+    <main className="flex min-h-screen flex-col items-center justify-between">
       <FloatingWidget />
     </main>
   );
