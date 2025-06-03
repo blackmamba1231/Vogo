@@ -119,53 +119,53 @@ const FloatingWidget = () => {
 
   // Handle auto-redirect when shouldRedirect is true
   useEffect(() => {
-    // Get the last message and check for redirect metadata
-    const lastMessage = messages[messages.length - 1] as MessageWithMetadata | undefined;
-    console.log('Last message:', lastMessage);
-    
-    // Check for redirect in message metadata
-    const metadata = lastMessage?.metadata;
-    console.log('Message metadata:', metadata);
-    
-    // Check for redirect in appointment details if present
-    const appointmentDetails = metadata?.appointmentDetails;
-    const calendarLink = appointmentDetails?.googleCalendarLink;
-    
-    // Determine the redirect URL from any available source
-    const redirectUrl = metadata?.redirectUrl || calendarLink || '';
-    const shouldRedirect = metadata?.shouldRedirect || !!calendarLink;
-    
-    console.log('Redirect check:', { shouldRedirect, redirectUrl, calendarLink });
-    
-    if (shouldRedirect && redirectUrl) {
-      console.log('Attempting to redirect to:', redirectUrl);
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1] as MessageWithMetadata | undefined;
+      const metadata = lastMessage?.metadata;
       
-      // First, try to notify the parent window if we're in an iframe
-      try {
-        if (window.parent && window.parent !== window) {
-          console.log('Widget is in iframe, sending message to parent');
-          window.parent.postMessage({
-            type: 'VOGO_WIDGET_REDIRECT',
-            url: redirectUrl
-          }, '*');
-        }
-      } catch (e) {
-        console.error('Error sending postMessage to parent:', e);
-      }
+      // Enhanced logging for debugging
+      console.log('Last message metadata:', JSON.stringify({
+        messageContent: lastMessage?.content,
+        metadata: metadata,
+        hasAppointmentDetails: !!metadata?.appointmentDetails,
+        hasGoogleCalendarLink: !!metadata?.appointmentDetails?.googleCalendarLink,
+        hasRedirectUrl: !!metadata?.redirectUrl,
+        shouldRedirect: metadata?.shouldRedirect
+      }, null, 2));
       
-      // Add a small delay to allow the UI to update
-      const timer = setTimeout(() => {
-        console.log('Opening URL in new tab:', redirectUrl);
+      // Check for appointment details with google calendar link
+      const appointmentDetails = metadata?.appointmentDetails as { googleCalendarLink?: string } | undefined;
+      const calendarLink = appointmentDetails?.googleCalendarLink;
+      
+      // Check for direct redirect URL
+      const redirectUrl = metadata?.redirectUrl || calendarLink || '';
+      const shouldRedirect = metadata?.shouldRedirect || !!calendarLink;
+      
+      console.log('Redirect check:', { 
+        shouldRedirect, 
+        redirectUrl, 
+        calendarLink,
+        hasAppointmentDetails: !!appointmentDetails,
+        hasGoogleCalendarLink: !!calendarLink,
+        hasRedirectUrl: !!metadata?.redirectUrl
+      });
+      
+      if (shouldRedirect && redirectUrl) {
+        console.log('Attempting to redirect to:', redirectUrl);
         
-        // Try to directly change location if we're in the top window
-        if (window === window.top) {
+        // Try to use postMessage if we're in an iframe
+        if (window.parent !== window) {
           try {
-            console.log('Widget is in top window, redirecting directly');
-            window.location.href = redirectUrl;
-            return;
+            console.log('Sending postMessage to parent window');
+            window.parent.postMessage({
+              type: 'redirect',
+              url: redirectUrl
+            }, '*');
           } catch (e) {
-            console.error('Error redirecting directly:', e);
+            console.error('Error sending postMessage:', e);
           }
+        } else {
+          console.log('Not in an iframe, will open in new tab');
         }
         
         // If direct redirect didn't work, try to open in a new tab
@@ -626,15 +626,34 @@ const FloatingWidget = () => {
       
       // If we have an aiResponse, make sure it gets added to the messages
       if (response.aiResponse) {
+        // Create a copy of the metadata to avoid reference issues
+        const metadata = response.aiResponse.metadata ? { ...response.aiResponse.metadata } : {};
+        
+        // If we have appointment details, ensure they're included in the metadata
+        if (response.appointmentDetails) {
+          metadata.appointmentDetails = response.appointmentDetails;
+          // If there's a google calendar link, ensure it's in the metadata
+          if (response.appointmentDetails.googleCalendarLink && !metadata.redirectUrl) {
+            metadata.redirectUrl = response.appointmentDetails.googleCalendarLink;
+            metadata.shouldRedirect = true;
+          }
+        }
+        
         const aiResponseMessage: Message = {
           role: 'assistant' as const, // Explicitly type as 'assistant'
           content: response.aiResponse.content,
-          metadata: response.aiResponse.metadata,
+          metadata: metadata,
           timestamp: new Date().toISOString(),
           _id: `msg_${Date.now()}`
         };
         
-        console.log('Adding AI response to messages:', aiResponseMessage);
+        console.log('Adding AI response to messages with metadata:', JSON.stringify({
+          content: aiResponseMessage.content,
+          metadata: aiResponseMessage.metadata,
+          hasAppointmentDetails: !!aiResponseMessage.metadata?.appointmentDetails,
+          hasRedirectUrl: !!aiResponseMessage.metadata?.redirectUrl
+        }, null, 2));
+        
         latestMessages.push(aiResponseMessage);
       }
       
@@ -1272,13 +1291,21 @@ const FloatingWidget = () => {
                           <div className={styles.messageText} dangerouslySetInnerHTML={{ __html: formatMessage(filterProductInfo(msg.content)) }}></div>
                           
                           {/* Display calendar button if redirect URL is available */}
-                          {(msg.metadata?.shouldRedirect && msg.metadata?.redirectUrl) && (
+                          {((msg.metadata?.shouldRedirect && msg.metadata?.redirectUrl) || 
+                            msg.metadata?.appointmentDetails?.googleCalendarLink) && (
                             <div className={styles.calendarButtonContainer}>
                               <a 
-                                href={msg.metadata.redirectUrl} 
+                                href={msg.metadata.redirectUrl || msg.metadata.appointmentDetails?.googleCalendarLink} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className={styles.calendarButton}
+                                onClick={(e) => {
+                                  console.log('Calendar button clicked', {
+                                    redirectUrl: msg.metadata?.redirectUrl,
+                                    googleCalendarLink: msg.metadata?.appointmentDetails?.googleCalendarLink,
+                                    finalUrl: msg.metadata.redirectUrl || msg.metadata.appointmentDetails?.googleCalendarLink
+                                  });
+                                }}
                               >
                                 📅 View in Calendar
                               </a>
