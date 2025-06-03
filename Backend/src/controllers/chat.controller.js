@@ -869,9 +869,9 @@ try {
     if (!schedulingInfo.serviceType) {
       nextQuestion = "What type of service would you like to schedule? (e.g., auto service, consultation)";
     } else if (!schedulingInfo.hasDate) {
-      nextQuestion = `For your ${schedulingInfo.serviceType}, what date would you prefer? (e.g., tomorrow, next Monday, or a specific date)`;
+      nextQuestion = `For your service, what date would you prefer? (e.g., tomorrow, next Monday, or a specific date)`;
     } else if (!schedulingInfo.hasTime) {
-      nextQuestion = `What time would you prefer for your ${schedulingInfo.serviceType} on ${schedulingInfo.date}? (e.g., 2pm, 14:00)`;
+      nextQuestion = `What time would you prefer for your service ? (e.g., 2pm, 14:00)`;
     }
 
     // Update conversation with current scheduling state

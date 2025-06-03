@@ -2,12 +2,18 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-   // ... existing fields ...
-   googleId: String,
-   googleEmail: String,
-   googleAccessToken: String,
-   googleRefreshToken: String,
-   googleCalendarConnected: { type: Boolean, default: false },
+  // WordPress integration fields
+  wpUserId: {
+    type: String,
+    index: true
+  },
+  
+  // Google integration fields
+  googleId: String,
+  googleEmail: String,
+  googleAccessToken: String,
+  googleRefreshToken: String,
+  googleCalendarConnected: { type: Boolean, default: false },
  
   email: {
     type: String,

@@ -143,9 +143,23 @@ class CalendarService {
         // Get user email if available
         let userEmail = null;
         if (userId) {
-          const user = await User.findById(userId);
-          userEmail = user?.email;
-          console.log('User email for calendar invite:', userEmail);
+          // Handle both MongoDB ObjectIds and WordPress user IDs (strings)
+          let user = null;
+          try {
+            // First try direct MongoDB ID lookup
+            user = await User.findById(userId).catch(() => null);
+            
+            // If not found and userId is a string, try WordPress user ID
+            if (!user && typeof userId === 'string') {
+              console.log('Trying to find user by WordPress ID:', userId);
+              user = await User.findOne({ wpUserId: userId }).catch(() => null);
+            }
+            
+            userEmail = user?.email;
+            console.log('User email for calendar invite:', userEmail || 'Not found');
+          } catch (userError) {
+            console.error('Error finding user for calendar invite:', userError);
+          }
         }
         
         // Create event with user as attendee if email is available
@@ -238,7 +252,27 @@ class CalendarService {
       }
       
       // Send email notification to business
-      await this.sendNotificationEmail(calendarEvent, userId ? await User.findById(userId) : null);
+      // Handle WordPress user IDs (strings) vs MongoDB ObjectIds
+      let userInfo = null;
+      if (userId) {
+        try {
+          // First try to find by exact ID match (for MongoDB ObjectIds)
+          userInfo = await User.findById(userId).catch(() => null);
+          
+          if (!userInfo) {
+            // If not found and userId is a string, try to find by wpUserId field
+            if (typeof userId === 'string') {
+              userInfo = await User.findOne({ wpUserId: userId }).catch(() => null);
+            }
+          }
+          
+          console.log('User info for notification:', userInfo ? 'Found' : 'Not found');
+        } catch (userError) {
+          console.error('Error finding user for notification:', userError);
+        }
+      }
+      
+      await this.sendNotificationEmail(calendarEvent, userInfo);
       
       return calendarEvent;
     } catch (error) {
