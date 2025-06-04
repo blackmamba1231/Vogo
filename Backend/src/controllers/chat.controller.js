@@ -1267,6 +1267,8 @@ Examples:
 - Input: "t please I am looking for travel and assistance services" → Output: "travel"
 - Input: "can you show me red running shoes for men" → Output: "shoes"
 -Input : "i need travel services to abu dhabi/any other locations "-> "travel"
+-Input: "i need dog foods" -> "dog foods"
+you must be smart to process the user query and return the most relevant search terms with tokenization and finding the relavent search keywords
 means ignore all the things instead of one word that is representing main context dont include locations , types or other generics defined by user you have to be smart
 
 User query: ${userMessage}`;
