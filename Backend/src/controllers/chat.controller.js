@@ -10,6 +10,7 @@ const woocommerceService = require('../services/woocommerce.service');
 const woocommerceSyncService = require('../services/woocommerce-sync.service');
 const ticketService = require('../services/ticket.service');
 const nodemailer = require('nodemailer');
+const CalendarEvent = require('../models/calendar-event.model');
 const SYSTEM_PROMPT = `You are a helpful assistant for our business that provides products and services. 
 - Maintain context of previous messages in the conversation.
 - If the user refers to products or services mentioned earlier, use that context.
@@ -205,19 +206,19 @@ let intent;
         return;
       }else{
         try {
-          const calendar = await getCalendarClient(conversation.userId);
           const now = new Date();
           const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
           
-          const events = await calendar.events.list({
-            calendarId: 'primary',
-            timeMin: oneYearAgo.toISOString(),
-            timeMax: now.toISOString(),
-            singleEvents: true,
-            orderBy: 'startTime',
-          });
+          // Query calendar events from the database
+          const events = await CalendarEvent.find({
+            $or: [
+              { userId: conversation.userId }
+            ],
+            startDateTime: { $gte: oneYearAgo, $lte: now },
+            status: { $ne: 'cancelled' }
+          }).sort({ startDateTime: 1 });
       
-          const schedules = events.data.items.map(event => ({
+          const schedules = events.map(event => ({
             summary: event.summary,
             start: event.start.dateTime || event.start.date,
             end: event.end.dateTime || event.end.date,
@@ -545,17 +546,18 @@ let intent;
       return;
     }else{
       try {
-        const calendar = await getCalendarClient(conversation.userId);
         const now = new Date();
         const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
         
-        const events = await calendar.events.list({
-          calendarId: 'primary',
-          timeMin: oneYearAgo.toISOString(),
-          timeMax: now.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
+        // Query calendar events from the database
+        const events = await CalendarEvent.find({
+          $or: [
+            { userId: conversation.userId },
+            { guestId: conversation.guestId }
+          ],
+          startDateTime: { $gte: oneYearAgo, $lte: now },
+          status: { $ne: 'cancelled' }
+        }).sort({ startDateTime: 1 });
     
         const schedules = events.data.items.map(event => ({
           summary: event.summary,
@@ -798,7 +800,7 @@ try {
         });
 
         // Create the response message
-        const responseMessage = `Your ${serviceType} appointment has been scheduled .`;
+        const responseMessage = `Your ${serviceType} appointment has been scheduled. `;
         
         // Prepare response with auto-redirect to Google Calendar if link is available
         const response = {
