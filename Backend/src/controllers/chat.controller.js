@@ -218,10 +218,12 @@ let intent;
           }).sort({ startDateTime: 1 });
       
           const schedules = events.map(event => ({
-            summary: event.summary,
-            start: event.start.dateTime || event.start.date,
-            end: event.end.dateTime || event.end.date,
-            status: event.status
+            summary: event.title,
+            start: event.startDateTime,
+            end: event.endDateTime,
+            status: event.status,
+            description: event.description,
+            location: event.location
           }));
       
           let message = schedules.length > 0 
