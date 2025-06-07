@@ -10,7 +10,6 @@ const woocommerceService = require('../services/woocommerce.service');
 const woocommerceSyncService = require('../services/woocommerce-sync.service');
 const ticketService = require('../services/ticket.service');
 const nodemailer = require('nodemailer');
-const CalendarEvent = require('../models/calendar-event.model');
 const SYSTEM_PROMPT = `You are a helpful assistant for our business that provides products and services. 
 - Maintain context of previous messages in the conversation.
 - If the user refers to products or services mentioned earlier, use that context.
